@@ -1,0 +1,11 @@
+{
+  "name": "Lets connect",
+  "description": "A modern chat application with AI-powered features and video/audio calls.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture",
+    "geolocation"
+  ],
+  "prompt": ""
+}

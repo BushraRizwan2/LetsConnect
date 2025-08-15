@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Let's Connect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'primary': '#1F2029',         // Sidebar background
+              'secondary': '#272932',       // Main content background
+              'accent': '#2563EB',          // Future dark blue (blue-600)
+              'highlight': '#3B82F6',       // Lighter blue for hover (blue-500)
+              'text-primary': '#FFFFFF',    // Main text (white)
+              'text-secondary': '#8B8D97',  // Gray, secondary text
+              'btn-bg': '#393B44',          // Dark gray button background
+              'btn-bg-alt': '#D9D9D9',      // Light gray button background (for active toggles)
+              'btn-text-alt': '#1F2029',    // Dark text for light gray buttons
+              'danger': '#E57373',          // Red for 'late payment' text
+              'success': '#22C55E',         // Green for progress bar
+              'border-color': '#393B44',    // Border color
+              'payroll-btn-bg': '#1D4ED8',  // Darker blue (blue-700)
+              'payroll-btn-text': '#60A5FA',// Lighter blue (blue-400)
+              'online': '#22c55e', // Green 500
+              'offline': '#64748b', // Slate 500
+              'busy': '#ef4444', // Red 500
+            },
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Slide-in animation */
+      @keyframes slide-in-left {
+        from {
+          transform: translateX(-100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .animate-slide-in-left {
+        animation: slide-in-left 0.3s ease-out forwards;
+      }
+
+      @keyframes slide-in-right {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .animate-slide-in-right {
+        animation: slide-in-right 0.3s ease-out forwards;
+      }
+      
+      /* Fade-in animation for menus and other elements */
+      @keyframes fade-in {
+          from {
+              opacity: 0;
+          }
+          to {
+              opacity: 1;
+          }
+      }
+      .animate-fade-in-fast {
+        animation: fade-in 0.15s ease-out forwards;
+      }
+
+      /* Fade-in-down animation for notifications */
+      @keyframes fade-in-down {
+          from {
+              opacity: 0;
+              transform: translateY(-20px) translateX(-50%);
+          }
+          to {
+              opacity: 1;
+              transform: translateY(0) translateX(-50%);
+          }
+      }
+      .animate-fade-in-down {
+        animation: fade-in-down 0.5s ease-out forwards;
+      }
+      
+      /* Animation for meeting emoji reactions */
+      @keyframes ping-once {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.5); opacity: 0.7; }
+        100% { transform: scale(1); opacity: 0; }
+      }
+      .animate-ping-once {
+        animation: ping-once 1.5s ease-out forwards;
+      }
+
+      /* Custom Scrollbar Styles */
+      /* For Webkit-based browsers (Chrome, Safari, Edge) */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #272932; /* secondary */
+      }
+      ::-webkit-scrollbar-thumb {
+        background-color: #393B44; /* btn-bg */
+        border-radius: 4px;
+        border: 2px solid #272932; /* secondary */
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: #8B8D97; /* text-secondary */
+      }
+
+      /* For Firefox */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #393B44 #272932;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "react": "https://esm.sh/react@^18.2.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.7.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
