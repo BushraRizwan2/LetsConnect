@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Message, TranscriptInfo } from '../types';
@@ -293,306 +292,323 @@ const SelectionIndicator: React.FC<{ isSelected: boolean }> = ({ isSelected }) =
     </div>
 );
 
-const MessageBubbleWithoutMemo: React.ForwardRefRenderFunction<HTMLDivElement, MessageBubbleProps> = ({ message, onReply, onJumpToMessage, isInSelectionMode, isSelected, onToggleSelection, onStartSelection, onStartForwarding, searchTerm, isCurrentResult, onImageClick, onShowReactions, onViewTranscript }, ref) => {
-  const { user, getContactById, activeChatId, chats, deleteMessage, toggleReaction, editMessage, copyToClipboard, togglePinMessage, replyPrivately, setActiveChatId, getOrCreatePrivateChat } = useAppContext();
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(message.content);
+const MessageBubble = React.memo(React.forwardRef<HTMLDivElement, MessageBubbleProps>((props, ref) => {
+    const {
+        message,
+        onReply,
+        onJumpToMessage,
+        isInSelectionMode,
+        isSelected,
+        onToggleSelection,
+        onStartSelection,
+        onStartForwarding,
+        searchTerm,
+        isCurrentResult,
+        onImageClick,
+        onShowReactions,
+        onViewTranscript
+    } = props;
 
-  const moreMenuRef = useRef<HTMLDivElement>(null);
-  const emojiPickerRef = useRef<HTMLDivElement>(null);
+    const { user, getContactById, activeChatId, chats, deleteMessage, toggleReaction, editMessage, copyToClipboard, togglePinMessage, replyPrivately, setActiveChatId, getOrCreatePrivateChat } = useAppContext();
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedContent, setEditedContent] = useState(message.content);
 
-  const isCurrentUser = message.senderId === user.id;
-  const activeChat = chats.find(c => c.id === activeChatId);
-  const sender = getContactById(message.senderId);
-  const alignmentClass = isCurrentUser ? 'items-end' : 'items-start';
-  
-  const handleBubbleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('button')) {
-        return; 
-    }
-    if (isInSelectionMode) {
-        onToggleSelection(message.id);
-    }
-  };
+    const moreMenuRef = useRef<HTMLDivElement>(null);
+    const emojiPickerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-        if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
-            setShowMoreMenu(false);
+    const isCurrentUser = message.senderId === user.id;
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const sender = getContactById(message.senderId);
+    const alignmentClass = isCurrentUser ? 'items-end' : 'items-start';
+
+    const handleBubbleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.target instanceof HTMLAnchorElement || (e.target as HTMLElement).closest('button')) {
+            return;
         }
-        if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
-            setShowEmojiPicker(false);
+        if (isInSelectionMode) {
+            onToggleSelection(message.id);
         }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
-  const handleStartEditing = () => {
-    setIsEditing(true);
-    setEditedContent(message.content);
-    setShowMoreMenu(false);
-  };
-  const handleCancelEditing = () => setIsEditing(false);
-  const handleSaveEditing = () => {
-    if (editedContent.trim() && editedContent !== message.content) {
-        if (activeChatId) editMessage(activeChatId, message.id, editedContent);
-    }
-    setIsEditing(false);
-  };
-  
-  const handleSenderNameClick = () => {
-      if (sender) {
-          const chatId = getOrCreatePrivateChat(sender.id);
-          setActiveChatId(chatId);
-      }
-  };
-  
-  const isAnImage = useMemo(() => {
-    return message.type === 'image' || (message.type === 'file' && !!message.fileInfo?.type.startsWith('image/'));
-  }, [message.type, message.fileInfo]);
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+                setShowMoreMenu(false);
+            }
+            if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+                setShowEmojiPicker(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
-  const bubblePaddingClass = isAnImage ? 'p-1' : 'px-4 pt-3 pb-6';
-  const bubbleBgClass = isAnImage ? 'bg-transparent' : isCurrentUser ? 'bg-accent' : 'bg-primary';
-  const bubbleClasses = isCurrentUser ? `${bubbleBgClass} text-white rounded-br-lg` : `${bubbleBgClass} text-text-primary rounded-bl-lg`;
-  
-
-  if (isEditing) {
-      return (
-          <div ref={ref} className={`flex flex-col ${alignmentClass}`}>
-              <div className={`flex items-center space-x-2 w-full max-w-lg bg-secondary p-2 rounded-lg ${isCurrentUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                  <textarea
-                      value={editedContent}
-                      onChange={e => setEditedContent(e.target.value)}
-                      onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEditing(); }
-                          if (e.key === 'Escape') { e.preventDefault(); handleCancelEditing(); }
-                      }}
-                      autoFocus
-                      className="flex-1 bg-primary px-3 py-2 rounded-md text-text-primary focus:outline-none focus:ring-2 focus:ring-highlight resize-none transition-colors"
-                      rows={1}
-                      style={{ height: 'auto', overflowY: 'hidden' }}
-                      onInput={(e) => {
-                          const target = e.currentTarget;
-                          target.style.height = 'auto';
-                          target.style.height = `${target.scrollHeight}px`;
-                      }}
-                  />
-                  <div className="flex items-center space-x-1">
-                      <button onClick={handleCancelEditing} className="p-2 bg-secondary text-text-secondary hover:bg-slate-700 rounded-full transition-colors" aria-label="Cancel edit">
-                          <XIcon className="w-6 h-6"/>
-                      </button>
-                      <button onClick={handleSaveEditing} className="p-2 bg-accent text-white rounded-full hover:bg-highlight transition-colors" aria-label="Save changes">
-                          <CheckIcon className="w-6 h-6"/>
-                      </button>
-                  </div>
-              </div>
-          </div>
-      );
-  }
-
-  if (message.isDeleted) {
-    return (
-      <div ref={ref} className={`flex flex-col ${alignmentClass}`}>
-        <div className="flex items-center space-x-2 max-w-[85%]">
-          <div className="px-4 py-3 rounded-2xl italic text-text-secondary bg-secondary">
-            This message was deleted
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const renderContent = () => {
-    switch (message.type) {
-        case 'image': {
-            const photoUrl = getPhotoUrlFromMessage(message);
-            if (!photoUrl) return <div className="text-sm italic text-text-secondary">[Image not available]</div>;
-            return <img src={photoUrl} alt="shared content" className="rounded-xl max-w-full max-h-80 object-contain cursor-pointer" onClick={() => onImageClick(message)}/>;
+    const handleStartEditing = () => {
+        setIsEditing(true);
+        setEditedContent(message.content);
+        setShowMoreMenu(false);
+    };
+    const handleCancelEditing = () => setIsEditing(false);
+    const handleSaveEditing = () => {
+        if (editedContent.trim() && editedContent !== message.content) {
+            if (activeChatId) editMessage({ chatId: activeChatId, messageId: message.id, newContent: editedContent });
         }
-        case 'file': {
-            if (message.fileInfo?.type.startsWith('video/')) {
+        setIsEditing(false);
+    };
+
+    const handleSenderNameClick = () => {
+        if (sender) {
+            const chatId = getOrCreatePrivateChat(sender.id);
+            setActiveChatId(chatId);
+        }
+    };
+
+    const isAnImage = useMemo(() => {
+        return message.type === 'image' || (message.type === 'file' && !!message.fileInfo?.type.startsWith('image/'));
+    }, [message.type, message.fileInfo]);
+
+    const bubblePaddingClass = isAnImage ? 'p-1' : 'px-4 pt-3 pb-6';
+    const bubbleBgClass = isAnImage ? 'bg-transparent' : isCurrentUser ? 'bg-accent' : 'bg-primary';
+    const bubbleClasses = isCurrentUser ? `${bubbleBgClass} text-white rounded-br-lg` : `${bubbleBgClass} text-text-primary rounded-bl-lg`;
+
+    if (isEditing) {
+        return (
+            <div ref={ref} className={`flex flex-col ${alignmentClass}`}>
+                <div className={`flex items-center space-x-2 w-full max-w-lg bg-secondary p-2 rounded-lg ${isCurrentUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                    <textarea
+                        value={editedContent}
+                        onChange={e => setEditedContent(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEditing(); }
+                            if (e.key === 'Escape') { e.preventDefault(); handleCancelEditing(); }
+                        }}
+                        autoFocus
+                        className="flex-1 bg-primary px-3 py-2 rounded-md text-text-primary focus:outline-none focus:ring-2 focus:ring-highlight resize-none transition-colors"
+                        rows={1}
+                        style={{ height: 'auto', overflowY: 'hidden' }}
+                        onInput={(e) => {
+                            const target = e.currentTarget;
+                            target.style.height = 'auto';
+                            target.style.height = `${target.scrollHeight}px`;
+                        }}
+                    />
+                    <div className="flex items-center space-x-1">
+                        <button onClick={handleCancelEditing} className="p-2 bg-secondary text-text-secondary hover:bg-slate-700 rounded-full transition-colors" aria-label="Cancel edit">
+                            <XIcon className="w-6 h-6" />
+                        </button>
+                        <button onClick={handleSaveEditing} className="p-2 bg-accent text-white rounded-full hover:bg-highlight transition-colors" aria-label="Save changes">
+                            <CheckIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (message.isDeleted) {
+        return (
+            <div ref={ref} className={`flex flex-col ${alignmentClass}`}>
+                <div className="flex items-center space-x-2 max-w-[85%]">
+                    <div className="px-4 py-3 rounded-2xl italic text-text-secondary bg-secondary">
+                        This message was deleted
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const renderContent = () => {
+        switch (message.type) {
+            case 'image': {
+                const photoUrl = getPhotoUrlFromMessage(message);
+                if (!photoUrl) return <div className="text-sm italic text-text-secondary">[Image not available]</div>;
+                return <img src={photoUrl} alt="shared content" className="rounded-xl max-w-full max-h-80 object-contain cursor-pointer" onClick={() => onImageClick(message)} />;
+            }
+            case 'file': {
+                if (message.fileInfo?.type.startsWith('video/')) {
+                    return (
+                        <video controls src={message.fileInfo.url} className="rounded-lg max-w-xs max-h-80">
+                            Your browser does not support the video tag.
+                        </video>
+                    );
+                }
+                const photoUrl = getPhotoUrlFromMessage(message);
+                if (photoUrl) {
+                    return <img src={photoUrl} alt={message.fileInfo?.name || "shared image"} className="rounded-xl max-w-full max-h-80 object-contain cursor-pointer" onClick={() => onImageClick(message)} />;
+                }
                 return (
-                    <video controls src={message.fileInfo.url} className="rounded-lg max-w-xs max-h-80">
-                        Your browser does not support the video tag.
-                    </video>
+                    <a href={message.fileInfo?.url || '#'} download={message.fileInfo?.name} className="flex items-center space-x-3 bg-slate-500/50 p-3 rounded-lg hover:bg-slate-500/80 transition-colors max-w-xs">
+                        <DocumentTextIcon className="w-8 h-8 flex-shrink-0 text-white" />
+                        <div>
+                            <p className="font-semibold break-all">{message.fileInfo?.name}</p>
+                            <p className="text-sm opacity-80">{message.fileInfo?.size}</p>
+                        </div>
+                    </a>
                 );
             }
-            const photoUrl = getPhotoUrlFromMessage(message);
-            if (photoUrl) {
-                return <img src={photoUrl} alt={message.fileInfo?.name || "shared image"} className="rounded-xl max-w-full max-h-80 object-contain cursor-pointer" onClick={() => onImageClick(message)}/>;
-            }
-            return (
-                <a href={message.fileInfo?.url || '#'} download={message.fileInfo?.name} className="flex items-center space-x-3 bg-slate-500/50 p-3 rounded-lg hover:bg-slate-500/80 transition-colors max-w-xs">
-                    <DocumentTextIcon className="w-8 h-8 flex-shrink-0 text-white"/>
-                    <div>
-                        <p className="font-semibold break-all">{message.fileInfo?.name}</p>
-                        <p className="text-sm opacity-80">{message.fileInfo?.size}</p>
-                    </div>
-                </a>
-            );
-        }
-        case 'contact':
-            return (
-                <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-500/50 max-w-xs">
-                    <UserCircleIcon className="w-10 h-10 flex-shrink-0 text-white"/>
-                    <div>
-                        <p className="font-semibold">{message.contactInfo?.name}</p>
-                        <p className="text-sm opacity-80">Contact Card</p>
-                    </div>
-                </div>
-            );
-        case 'location':
-            const { latitude, longitude, address } = message.locationInfo || {};
-            if (latitude === undefined || longitude === undefined) return null;
-            const mapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=16/${latitude}/${longitude}`;
-            const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.01},${latitude - 0.01},${longitude + 0.01},${latitude + 0.01}&layer=mapnik&marker=${latitude},${longitude}`;
-            return (
-                <div className="max-w-xs rounded-lg overflow-hidden bg-secondary shadow-md">
-                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" aria-label={`View location ${address} on OpenStreetMap`}>
-                        <iframe src={mapEmbedUrl} className="w-full h-48 border-none" loading="lazy" referrerPolicy="no-referrer" title={`Map of ${address}`}></iframe>
-                    </a>
-                    <div className="p-3">
-                        <p className="font-semibold text-text-primary truncate" title={address || 'Shared Location'}>{address || 'Shared Location'}</p>
-                        <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-highlight hover:underline">View on OpenStreetMap</a>
-                    </div>
-                </div>
-            );
-        case 'audio':
-            if (!message.audioInfo) return null;
-            return <AudioPlayer src={message.audioInfo.url} duration={message.audioInfo.duration} />;
-        case 'transcript':
-            return (
-                <button
-                    onClick={() => message.transcriptInfo && onViewTranscript(message.transcriptInfo)}
-                    className="flex flex-col space-y-2 bg-slate-500/50 p-3 rounded-lg hover:bg-slate-500/80 transition-colors max-w-xs w-full text-left"
-                >
-                    <div className="flex items-center space-x-3">
-                        <ClipboardDocumentListIcon className="w-8 h-8 flex-shrink-0 text-white"/>
+            case 'contact':
+                return (
+                    <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-500/50 max-w-xs">
+                        <UserCircleIcon className="w-10 h-10 flex-shrink-0 text-white" />
                         <div>
-                            <p className="font-semibold break-all">Meeting Transcript</p>
-                            <p className="text-sm opacity-80 truncate">{message.transcriptInfo?.title}</p>
+                            <p className="font-semibold">{message.contactInfo?.name}</p>
+                            <p className="text-sm opacity-80">Contact Card</p>
                         </div>
                     </div>
-                    <span className="text-sm font-semibold text-highlight self-start">View full transcript</span>
-                </button>
-            );
-        case 'text':
-             return <HighlightedContent text={message.content} highlight={searchTerm} isCurrentUser={isCurrentUser} />;
-    }
-  };
-
-  const renderActions = () => (
-      <div className={`flex items-center self-end space-x-1 flex-shrink-0 mb-2`}>
-            {!isCurrentUser && (
-            <div ref={emojiPickerRef} className="relative">
-                <button onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }} className="p-1.5 text-accent hover:text-highlight rounded-full transition-colors">
-                    <FaceSmileIcon className="w-5 h-5"/>
-                </button>
-                {showEmojiPicker && (
-                    <div className="absolute bottom-full mb-1 flex space-x-1 bg-primary p-2 rounded-xl shadow-lg border border-slate-600">
-                        {EMOJI_REACTIONS.map(emoji => (
-                            <button key={emoji} onClick={(e) => { e.stopPropagation(); if(activeChatId) { toggleReaction(activeChatId, message.id, emoji); setShowEmojiPicker(false); }}} className="text-2xl p-1 rounded-full hover:bg-highlight/20 transition-transform transform hover:scale-125">{emoji}</button>
-                        ))}
+                );
+            case 'location':
+                const { latitude, longitude, address } = message.locationInfo || {};
+                if (latitude === undefined || longitude === undefined) return null;
+                const mapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=16/${latitude}/${longitude}`;
+                const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.01},${latitude - 0.01},${longitude + 0.01},${latitude + 0.01}&layer=mapnik&marker=${latitude},${longitude}`;
+                return (
+                    <div className="max-w-xs rounded-lg overflow-hidden bg-secondary shadow-md">
+                        <a href={mapUrl} target="_blank" rel="noopener noreferrer" aria-label={`View location ${address} on OpenStreetMap`}>
+                            <iframe src={mapEmbedUrl} className="w-full h-48 border-none" loading="lazy" referrerPolicy="no-referrer" title={`Map of ${address}`}></iframe>
+                        </a>
+                        <div className="p-3">
+                            <p className="font-semibold text-text-primary truncate" title={address || 'Shared Location'}>{address || 'Shared Location'}</p>
+                            <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-highlight hover:underline">View on OpenStreetMap</a>
+                        </div>
                     </div>
-                )}
-            </div>
-        )}
-        <div ref={moreMenuRef} className="relative">
-            <button onClick={(e) => { e.stopPropagation(); setShowMoreMenu(p => !p); }} className="p-1.5 text-accent hover:text-highlight rounded-full transition-colors">
-                <DotsHorizontalIcon className="w-5 h-5"/>
-            </button>
-            {showMoreMenu && activeChatId && (
-                <MoreActionsPopover
-                    anchorRef={moreMenuRef}
-                    isCurrentUser={isCurrentUser}
-                    onReply={() => { onReply(message); setShowMoreMenu(false); }}
-                    onForward={() => { onStartForwarding(message.id); setShowMoreMenu(false); }}
-                    onSelect={() => { onStartSelection(message.id); setShowMoreMenu(false); }}
-                    onEdit={isCurrentUser && message.type === 'text' ? handleStartEditing : undefined}
-                    onDeleteForMe={isCurrentUser ? () => { deleteMessage(activeChatId, message.id, false); setShowMoreMenu(false); } : undefined}
-                    onDeleteForEveryone={isCurrentUser ? () => { deleteMessage(activeChatId, message.id, true); setShowMoreMenu(false); } : undefined}
-                    onCopy={message.type === 'text' ? () => { copyToClipboard(message.content); setShowMoreMenu(false); } : undefined}
-                    onPin={() => { togglePinMessage(activeChatId, message.id); setShowMoreMenu(false); }}
-                    isPinned={activeChat?.pinnedMessages?.includes(message.id)}
-                    onReplyPrivately={activeChat?.type === 'group' && !isCurrentUser ? () => { replyPrivately(activeChatId, message.id); setShowMoreMenu(false); } : undefined}
-                />
+                );
+            case 'audio':
+                if (!message.audioInfo) return null;
+                return <AudioPlayer src={message.audioInfo.url} duration={message.audioInfo.duration} />;
+            case 'transcript':
+                return (
+                    <button
+                        onClick={() => message.transcriptInfo && onViewTranscript(message.transcriptInfo)}
+                        className="flex flex-col space-y-2 bg-slate-500/50 p-3 rounded-lg hover:bg-slate-500/80 transition-colors max-w-xs w-full text-left"
+                    >
+                        <div className="flex items-center space-x-3">
+                            <ClipboardDocumentListIcon className="w-8 h-8 flex-shrink-0 text-white" />
+                            <div>
+                                <p className="font-semibold break-all">Meeting Transcript</p>
+                                <p className="text-sm opacity-80 truncate">{message.transcriptInfo?.title}</p>
+                            </div>
+                        </div>
+                        <span className="text-sm font-semibold text-highlight self-start">View full transcript</span>
+                    </button>
+                );
+            case 'text':
+                return <HighlightedContent text={message.content} highlight={searchTerm} isCurrentUser={isCurrentUser} />;
+        }
+    };
+
+    const renderActions = () => (
+        <div className={`flex items-center self-end space-x-1 flex-shrink-0 mb-2`}>
+            {!isCurrentUser && (
+                <div ref={emojiPickerRef} className="relative">
+                    <button onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(p => !p); }} className="p-1.5 text-accent hover:text-highlight rounded-full transition-colors">
+                        <FaceSmileIcon className="w-5 h-5" />
+                    </button>
+                    {showEmojiPicker && (
+                        <div className="absolute bottom-full mb-1 flex space-x-1 bg-primary p-2 rounded-xl shadow-lg border border-slate-600">
+                            {EMOJI_REACTIONS.map(emoji => (
+                                <button key={emoji} onClick={(e) => { e.stopPropagation(); if (activeChatId) { toggleReaction({ chatId: activeChatId, messageId: message.id, emoji }); setShowEmojiPicker(false); } }} className="text-2xl p-1 rounded-full hover:bg-highlight/20 transition-transform transform hover:scale-125">{emoji}</button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
-        </div>
-    </div>
-  );
-  
-  const bubbleContent = (
-    <div className={`flex flex-col ${alignmentClass} message-actions-container`}>
-        {activeChat?.type === 'group' && !isCurrentUser && (
-            <button onClick={handleSenderNameClick} className={`text-sm font-semibold mb-1 ml-12 ${getUserColor(message.senderId)} hover:underline`}>
-                {sender?.name}
-            </button>
-        )}
-        <div className="flex items-end space-x-2 max-w-[85%]">
-          {isCurrentUser && !isInSelectionMode && !isAnImage && renderActions()}
-          {!isCurrentUser && (<img src={getAvatarUrl(sender?.name || '?', sender?.avatar)} alt={sender?.name} className="w-8 h-8 rounded-full self-end"/>)}
-            <div 
-              className={`relative ${bubblePaddingClass} rounded-2xl transition-all duration-200 min-w-[80px] max-w-lg ${bubbleClasses} ${isCurrentResult ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-secondary' : ''}`}
-              onClick={handleBubbleClick}
-            >
-                {message.replyInfo && (
-                    <ReplyPreview 
-                        message={message} 
-                        onJump={() => onJumpToMessage(message.replyInfo!.messageId)} 
+            <div ref={moreMenuRef} className="relative">
+                <button onClick={(e) => { e.stopPropagation(); setShowMoreMenu(p => !p); }} className="p-1.5 text-accent hover:text-highlight rounded-full transition-colors">
+                    <DotsHorizontalIcon className="w-5 h-5" />
+                </button>
+                {showMoreMenu && activeChatId && (
+                    <MoreActionsPopover
+                        anchorRef={moreMenuRef}
+                        isCurrentUser={isCurrentUser}
+                        onReply={() => { onReply(message); setShowMoreMenu(false); }}
+                        onForward={() => { onStartForwarding(message.id); setShowMoreMenu(false); }}
+                        onSelect={() => { onStartSelection(message.id); setShowMoreMenu(false); }}
+                        onEdit={isCurrentUser && message.type === 'text' ? handleStartEditing : undefined}
+                        onDeleteForMe={isCurrentUser ? () => { deleteMessage({ chatId: activeChatId, messageId: message.id, forEveryone: false }); setShowMoreMenu(false); } : undefined}
+                        onDeleteForEveryone={isCurrentUser ? () => { deleteMessage({ chatId: activeChatId, messageId: message.id, forEveryone: true }); setShowMoreMenu(false); } : undefined}
+                        onCopy={message.type === 'text' ? () => { copyToClipboard(message.content); setShowMoreMenu(false); } : undefined}
+                        onPin={() => { togglePinMessage({ chatId: activeChatId, messageId: message.id }); setShowMoreMenu(false); }}
+                        isPinned={activeChat?.pinnedMessages?.includes(message.id)}
+                        onReplyPrivately={activeChat?.type === 'group' && !isCurrentUser ? () => { replyPrivately({ sourceChatId: activeChatId, messageId: message.id }); setShowMoreMenu(false); } : undefined}
                     />
                 )}
-                {renderContent()}
-                <div className={`absolute bottom-1.5 right-1.5 flex items-center space-x-1.5 text-xs ${isAnImage ? 'bg-black/60 text-white/90 rounded-full px-2 py-1 backdrop-blur-sm' : isCurrentUser ? 'text-white/90' : 'text-text-secondary'}`}>
-                    {message.isEdited && <span className="mr-1.5">Edited</span>}
-                    <p>
-                      {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: user.settings?.timezone }).toLowerCase()}
-                    </p>
-                    {isCurrentUser && message.read && <CheckCircleIcon className={`w-4 h-4 ${isAnImage ? 'text-white' : 'text-white'}`} />}
+            </div>
+        </div>
+    );
+
+    const bubbleContent = (
+        <div className={`flex flex-col ${alignmentClass} message-actions-container`}>
+            {activeChat?.type === 'group' && !isCurrentUser && (
+                <button onClick={handleSenderNameClick} className={`text-sm font-semibold mb-1 ml-12 ${getUserColor(message.senderId)} hover:underline`}>
+                    {sender?.name}
+                </button>
+            )}
+            <div className="flex items-end space-x-2 max-w-[85%]">
+                {isCurrentUser && !isInSelectionMode && !isAnImage && renderActions()}
+                {!isCurrentUser && (<img src={getAvatarUrl(sender?.name || '?', sender?.avatar)} alt={sender?.name} className="w-8 h-8 rounded-full self-end" />)}
+                <div
+                    className={`relative ${bubblePaddingClass} rounded-2xl transition-all duration-200 min-w-[80px] max-w-lg ${bubbleClasses} ${isCurrentResult ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-secondary' : ''}`}
+                    onClick={handleBubbleClick}
+                >
+                    {message.replyInfo && (
+                        <ReplyPreview
+                            message={message}
+                            onJump={() => onJumpToMessage(message.replyInfo!.messageId)}
+                        />
+                    )}
+                    {renderContent()}
+                    <div className={`absolute bottom-1.5 right-1.5 flex items-center space-x-1.5 text-xs ${isAnImage ? 'bg-black/60 text-white/90 rounded-full px-2 py-1 backdrop-blur-sm' : isCurrentUser ? 'text-white/90' : 'text-text-secondary'}`}>
+                        {message.isEdited && <span className="mr-1.5">Edited</span>}
+                        <p>
+                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: user.settings?.timezone }).toLowerCase()}
+                        </p>
+                        {isCurrentUser && message.read && <CheckCircleIcon className={`w-4 h-4 ${isAnImage ? 'text-white' : 'text-white'}`} />}
+                    </div>
+                </div>
+                {!isCurrentUser && !isInSelectionMode && !isAnImage && renderActions()}
+            </div>
+            {message.reactions && Object.keys(message.reactions).length > 0 && !isInSelectionMode && (
+                <button
+                    onClick={() => onShowReactions(message)}
+                    className={`mt-2 flex items-center space-x-1 z-10 p-1 rounded-full bg-secondary hover:bg-slate-600 transition-colors ${isCurrentUser ? 'self-end mr-8' : 'self-start ml-12'}`}
+                    aria-label="View reactions"
+                >
+                    {Object.entries(message.reactions).slice(0, 3).map(([emoji, userIds]) =>
+                        userIds.length > 0 && <span key={emoji} className="text-sm">{emoji}</span>
+                    )}
+                    <span className="text-xs font-semibold text-text-secondary px-1">
+                        {Object.values(message.reactions).reduce((total, userIds) => total + userIds.length, 0)}
+                    </span>
+                </button>
+            )}
+        </div>
+    );
+
+    return (
+        <div ref={ref} className="flex items-center w-full cursor-pointer group/message-row" onClick={handleBubbleClick}>
+            <div className="flex-1 min-w-0">
+                <div className="relative">
+                    {bubbleContent}
+                    {isAnImage && (
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/message-row:opacity-100 transition-opacity">
+                            <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-sm p-1 rounded-full">
+                                {renderActions()}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
-          {!isCurrentUser && !isInSelectionMode && !isAnImage && renderActions()}
+            {isInSelectionMode && (
+                <div className="w-8 flex-shrink-0 self-center ml-2">
+                    <SelectionIndicator isSelected={isSelected} />
+                </div>
+            )}
         </div>
-        {message.reactions && Object.keys(message.reactions).length > 0 && !isInSelectionMode && (
-            <button
-                onClick={() => onShowReactions(message)}
-                className={`mt-2 flex items-center space-x-1 z-10 p-1 rounded-full bg-secondary hover:bg-slate-600 transition-colors ${isCurrentUser ? 'self-end mr-8' : 'self-start ml-12'}`}
-                aria-label="View reactions"
-            >
-                {Object.entries(message.reactions).slice(0, 3).map(([emoji, userIds]) => 
-                    userIds.length > 0 && <span key={emoji} className="text-sm">{emoji}</span>
-                )}
-                <span className="text-xs font-semibold text-text-secondary px-1">
-                    {Object.values(message.reactions).reduce((total, userIds) => total + userIds.length, 0)}
-                </span>
-            </button>
-        )}
-    </div>
-  );
+    );
+}));
 
-  return (
-    <div ref={ref} className="flex items-center w-full cursor-pointer group/message-row" onClick={handleBubbleClick}>
-        <div className="flex-1 min-w-0">
-            <div className="relative">
-                {bubbleContent}
-                {isAnImage && (
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/message-row:opacity-100 transition-opacity">
-                        <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-sm p-1 rounded-full">
-                            {renderActions()}
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-        {isInSelectionMode && (
-            <div className="w-8 flex-shrink-0 self-center ml-2">
-                <SelectionIndicator isSelected={isSelected} />
-            </div>
-        )}
-    </div>
-  );
-};
+MessageBubble.displayName = 'MessageBubble';
 
-export default React.memo(React.forwardRef(MessageBubbleWithoutMemo));
+export default MessageBubble;

@@ -7,6 +7,7 @@ import { virtualBackgrounds } from '../data/virtualBackgrounds';
 import { languages } from '../data/languages';
 import MessageInputBar from './MessageInputBar';
 import { TranscriptViewerModal } from './TranscriptViewerModal';
+import { MediaViewer } from './MediaViewer';
 import { 
     ChatBubbleLeftIcon, HandRaisedIcon, FaceSmileIcon,
     ClipboardDocumentListIcon, VideoCameraIcon, 
@@ -22,6 +23,7 @@ interface MeetingScreenProps {
     onOpenAddPeoplePicker: (chatId: string, participants: User[]) => void;
     onOpenFilePicker: (chatId: string, accept?: string) => void;
     onOpenCameraPicker: (chatId: string) => void;
+    onOpenForwardPicker: (sourceChatId: string, messageIds: string[]) => void;
 }
 
 type TranscriptEntry = {
@@ -64,7 +66,7 @@ const MarkdownText: React.FC<{ text: string }> = React.memo(({ text }) => {
 
 // --- START: In-Meeting Chat Renderer Components ---
 
-const MeetingChatBubble: React.FC<{ msg: Message, onViewTranscript: (info: TranscriptInfo) => void }> = ({ msg, onViewTranscript }) => {
+const MeetingChatBubble: React.FC<{ msg: Message, onViewTranscript: (info: TranscriptInfo) => void, onImageClick: (message: Message) => void }> = React.memo(({ msg, onViewTranscript, onImageClick }) => {
     const { user, getContactById } = useAppContext();
     const sender = getContactById(msg.senderId);
     const isSelf = msg.senderId === user.id;
@@ -77,7 +79,7 @@ const MeetingChatBubble: React.FC<{ msg: Message, onViewTranscript: (info: Trans
             case 'file':
                 const photoUrl = getPhotoUrlFromMessage(msg);
                 if (photoUrl) {
-                    return <img src={photoUrl} alt="Shared content" className="rounded-lg max-w-full max-h-48 object-contain" />;
+                    return <img src={photoUrl} alt="Shared content" className="rounded-lg max-w-full max-h-48 object-contain cursor-pointer" onClick={() => onImageClick(msg)} />;
                 }
                  if (msg.fileInfo?.type.startsWith('video/')) {
                     return <video controls src={msg.fileInfo.url} className="rounded-lg max-w-full max-h-48" />;
@@ -103,29 +105,53 @@ const MeetingChatBubble: React.FC<{ msg: Message, onViewTranscript: (info: Trans
             </div>
         </div>
     );
-};
+});
 
-const MeetingImageGrid: React.FC<{ messages: Message[] }> = ({ messages }) => {
+const MeetingImageGrid: React.FC<{ messages: Message[], onImageClick: (message: Message) => void }> = React.memo(({ messages, onImageClick }) => {
     const { user, getContactById } = useAppContext();
     const firstMsg = messages[0];
     const sender = getContactById(firstMsg.senderId);
     const isSelf = firstMsg.senderId === user.id;
+
+    const gridClasses: Record<number, string> = {
+        2: "grid-cols-2 grid-rows-1",
+        3: "grid-cols-2 grid-rows-2",
+        4: "grid-cols-2 grid-rows-2",
+    };
+    
+    const gridClass = gridClasses[messages.length] || "grid-cols-2 grid-rows-2";
 
     return (
         <div className={`flex items-start gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
             {!isSelf && sender && <img src={getAvatarUrl(sender.name, sender.avatar)} alt={sender.name} className="w-8 h-8 rounded-full self-end" />}
             <div className="max-w-xs">
                 {!isSelf && <p className="font-bold text-sm text-highlight mb-1">{sender?.name}</p>}
-                <div className="grid grid-cols-2 gap-1 bg-secondary p-1 rounded-lg">
-                    {messages.map(msg => (
-                        <img key={msg.id} src={getPhotoUrlFromMessage(msg)} alt="Shared grid" className="aspect-square object-cover rounded" />
-                    ))}
+                <div className={`grid gap-1 bg-secondary p-1 rounded-lg ${gridClass}`}>
+                    {messages.slice(0, 4).map((msg, index) => {
+                         const isLast = index === 3 && messages.length > 4;
+                         return (
+                            <div
+                                key={msg.id}
+                                onClick={() => onImageClick(msg)}
+                                className={`relative aspect-square rounded overflow-hidden cursor-pointer group 
+                                    ${messages.length === 3 && index === 0 ? 'row-span-2' : ''}
+                                `}
+                            >
+                                <img src={getPhotoUrlFromMessage(msg)} alt="grouped image" className="w-full h-full object-cover" />
+                                 {isLast && (
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                        <p className="text-white text-xl font-bold">+{messages.length - 3}</p>
+                                    </div>
+                                )}
+                            </div>
+                         );
+                    })}
                 </div>
                  <p className="text-xs opacity-70 text-right mt-1">{new Date(messages[messages.length-1].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
         </div>
     );
-}
+});
 
 const MeetingChatPanel: React.FC<{ 
     chatId: string, 
@@ -133,7 +159,8 @@ const MeetingChatPanel: React.FC<{
     onOpenFilePicker: (chatId: string, accept?: string) => void,
     onOpenCameraPicker: (chatId: string) => void,
     onViewTranscript: (info: TranscriptInfo) => void;
-}> = React.memo(({ chatId, onClose, onOpenFilePicker, onOpenCameraPicker, onViewTranscript }) => {
+    onImageClick: (message: Message) => void;
+}> = React.memo(({ chatId, onClose, onOpenFilePicker, onOpenCameraPicker, onViewTranscript, onImageClick }) => {
     const { chats, user } = useAppContext();
     const chat = chats.find(c => c.id === chatId);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -178,22 +205,29 @@ const MeetingChatPanel: React.FC<{
           if (isImageMessage(currentMsg)) {
             const imageGroup: Message[] = [];
             const senderId = currentMsg.senderId;
+            const timeDiff = 2 * 60 * 1000; // 2 minutes
             let j = i;
-            while (j < filtered.length && isImageMessage(filtered[j]) && filtered[j].senderId === senderId) {
-              imageGroup.push(filtered[j]); j++;
+            let lastTimestamp = new Date(currentMsg.timestamp).getTime();
+
+            while (j < filtered.length && isImageMessage(filtered[j]) && filtered[j].senderId === senderId && (new Date(filtered[j].timestamp).getTime() - lastTimestamp) < timeDiff) {
+              imageGroup.push(filtered[j]);
+              lastTimestamp = new Date(filtered[j].timestamp).getTime();
+              j++;
             }
             if (imageGroup.length > 1) {
               renderableItems.push({ type: 'image_grid', id: imageGroup[0].id, messages: imageGroup });
-              i = j; continue;
+              i = j;
+              continue;
             }
           }
-          renderableItems.push(currentMsg); i++;
+          renderableItems.push(currentMsg);
+          i++;
         }
         return renderableItems;
     }, [chat, user.id]);
 
     return (
-        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full animate-slide-in-right border-l border-slate-700 flex flex-col flex-shrink-0">
+        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0">
             <header className="flex-shrink-0 p-4 flex items-center justify-between border-b border-slate-700">
                 <h3 className="font-bold">Meeting chat</h3>
                 <button onClick={onClose} className="p-1 text-text-secondary hover:text-white"><XIcon className="w-5 h-5" /></button>
@@ -202,12 +236,12 @@ const MeetingChatPanel: React.FC<{
                 <div className="p-4 space-y-4">
                     {processedMessages.map(item => {
                         if ('messages' in item) {
-                             return <MeetingImageGrid key={item.id} messages={item.messages} />
+                             return <MeetingImageGrid key={item.id} messages={item.messages} onImageClick={onImageClick} />
                         }
                         if (item.senderId === 'system') {
                             return <div key={item.id} className="text-center text-xs text-text-secondary py-2">{item.content}</div>
                         }
-                        return <MeetingChatBubble key={item.id} msg={item} onViewTranscript={onViewTranscript} />;
+                        return <MeetingChatBubble key={item.id} msg={item} onViewTranscript={onViewTranscript} onImageClick={onImageClick} />;
                     })}
                     <div ref={messagesEndRef} />
                 </div>
@@ -229,13 +263,13 @@ const MeetingChatPanel: React.FC<{
 
 // --- END: In-Meeting Chat Renderer Components ---
 
-
 const MeetingPeoplePanel: React.FC<{ 
     meetingParticipants: MeetingParticipant[],
     activeParticipants: User[],
     onClose: () => void,
     onAddPeople: () => void,
-}> = React.memo(({ meetingParticipants, activeParticipants, onClose, onAddPeople }) => {
+    handleMuteParticipant: (participantId: string) => void;
+}> = React.memo(({ meetingParticipants, activeParticipants, onClose, onAddPeople, handleMuteParticipant }) => {
     const { user, contacts } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -264,15 +298,21 @@ const MeetingPeoplePanel: React.FC<{
     const filteredInMeeting = inMeeting.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const filteredInvited = invited.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const ParticipantRow: React.FC<{p: User, isYou?: boolean}> = ({ p, isYou = false }) => (
+    const ParticipantRow: React.FC<{p: User, isYou?: boolean, onMute: (participantId: string) => void}> = ({ p, isYou = false, onMute }) => (
         <li key={p.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary">
             <div className="flex items-center space-x-3">
                 <img src={getAvatarUrl(p.name, p.avatar)} alt={p.name} className="w-10 h-10 rounded-full" />
                 <span className="font-semibold">{p.name} {isYou ? '(You)' : ''}</span>
             </div>
             <div className="flex items-center space-x-3 text-text-secondary">
-                {p.isMuted ? <MicrophoneOffIcon className="w-5 h-5" /> : <MicrophoneOnIcon className="w-5 h-5" />}
-                {p.isCameraOn ? <VideoCameraIcon className="w-5 h-5" /> : <VideoCameraSlashIcon className="w-5 h-5" />}
+                <button
+                    onClick={() => onMute(p.id)}
+                    disabled={isYou}
+                    className="p-1 rounded-full hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={isYou ? 'Your microphone status' : `Mute ${p.name}`}
+                >
+                    {p.isMuted ? <MicrophoneOffIcon className="w-5 h-5 text-red-400" /> : <MicrophoneOnIcon className="w-5 h-5" />}
+                </button>
             </div>
         </li>
     );
@@ -283,21 +323,19 @@ const MeetingPeoplePanel: React.FC<{
                 <img src={getAvatarUrl(p.name, p.avatar)} alt={p.name} className="w-10 h-10 rounded-full opacity-60" />
                 <div className="flex flex-col">
                     <span className="font-semibold">{p.name}</span>
-                    <span className="text-xs text-text-secondary">{p.meetingStatus === 'pending' ? 'Invited' : 'Accepted'}</span>
+                    <span className="text-xs text-text-secondary capitalize">{p.meetingStatus}</span>
                 </div>
             </div>
-            {p.meetingStatus === 'pending' &&
-                <button 
-                    onClick={() => alert(`A reminder has been sent to ${p.name}.`)}
-                    className="text-xs font-semibold px-3 py-1.5 border border-slate-600 rounded-md hover:bg-secondary">
-                    Request to join
-                </button>
-            }
+            <button 
+                onClick={() => alert(`A reminder has been sent to ${p.name}.`)}
+                className="text-xs font-semibold px-3 py-1.5 border border-slate-600 rounded-md hover:bg-secondary">
+                Request to join
+            </button>
         </li>
     );
 
     return (
-        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full animate-slide-in-right border-l border-slate-700 flex flex-col flex-shrink-0">
+        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0">
             <header className="flex-shrink-0 p-4 flex items-center justify-between border-b border-slate-700">
                 <h3 className="font-bold">People ({inMeeting.length + invited.length})</h3>
                 <button onClick={onClose} className="p-1 text-text-secondary hover:text-white"><XIcon className="w-5 h-5" /></button>
@@ -322,7 +360,7 @@ const MeetingPeoplePanel: React.FC<{
                 <div className="p-2">
                     <h4 className="font-semibold text-text-secondary text-sm px-2 py-1">In this meeting ({filteredInMeeting.length})</h4>
                     <ul className="space-y-1">
-                        {filteredInMeeting.map(p => <ParticipantRow key={p.id} p={p} isYou={p.id === user.id} />)}
+                        {filteredInMeeting.map(p => <ParticipantRow key={p.id} p={p} isYou={p.id === user.id} onMute={handleMuteParticipant} />)}
                     </ul>
                 </div>
                 {filteredInvited.length > 0 && (
@@ -338,7 +376,7 @@ const MeetingPeoplePanel: React.FC<{
     );
 });
 
-const TimerDisplay: React.FC<{ startTime: number }> = ({ startTime }) => {
+const TimerDisplay: React.FC<{ startTime: number }> = React.memo(({ startTime }) => {
     const [duration, setDuration] = useState(() => Math.floor((Date.now() - startTime) / 1000));
 
     useEffect(() => {
@@ -360,7 +398,7 @@ const TimerDisplay: React.FC<{ startTime: number }> = ({ startTime }) => {
             {formatDuration(duration)}
         </div>
     );
-};
+});
 
 interface MeetingControlBarProps {
     startTime: number;
@@ -372,7 +410,7 @@ interface MeetingControlBarProps {
     activePanel: 'chat' | 'people' | null;
     onToggleRaiseHand: () => void; isHandRaised: boolean;
     onToggleRecording: () => void; isRecording: boolean;
-    onToggleEffects: () => void;
+    onToggleEffects: () => void; isEffectsPanelActive: boolean;
     onToggleCaptions: () => void; areCaptionsEnabled: boolean;
     onToggleTranslation: () => void; isTranslationEnabled: boolean;
     onShowEmojis: () => void;
@@ -438,7 +476,7 @@ const MeetingControlBar: React.FC<MeetingControlBarProps> = React.memo((props) =
                         isActive={props.isRecording}
                         isDestructive={props.isRecording}
                     />
-                    <ControlButton icon={SparklesIcon} label="Effects" onClick={props.onToggleEffects} isActive={false} hasIndicator={false} disabled={!props.isCameraOn} />
+                    <ControlButton icon={SparklesIcon} label="Effects" onClick={props.onToggleEffects} isActive={props.isEffectsPanelActive} hasIndicator={false} disabled={!props.isCameraOn} />
                     <div className="w-px h-10 bg-slate-600" />
                     <ControlButton icon={ClipboardDocumentListIcon} label="Captions" onClick={props.onToggleCaptions} isActive={props.areCaptionsEnabled} />
                     <ControlButton icon={GlobeAltIcon} label="Translate" onClick={props.onToggleTranslation} isActive={props.isTranslationEnabled} />
@@ -480,9 +518,9 @@ const EffectsPanel: React.FC<{
     currentWallpaper?: string;
     onChange: (effect: BackgroundEffect, url?: string) => void;
     onClose: () => void;
-}> = ({ currentEffect, currentWallpaper, onChange, onClose }) => {
+}> = React.memo(({ currentEffect, currentWallpaper, onChange, onClose }) => {
     return (
-        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full animate-slide-in-right border-l border-slate-700 flex flex-col flex-shrink-0">
+        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0">
             <header className="flex-shrink-0 p-4 flex items-center justify-between border-b border-slate-700">
                 <h3 className="font-bold">Background Effects</h3>
                 <button onClick={onClose} className="p-1 text-text-secondary hover:text-white"><XIcon className="w-5 h-5" /></button>
@@ -509,12 +547,12 @@ const EffectsPanel: React.FC<{
             </div>
         </aside>
     );
-};
+});
 
 
 // Main Component
-export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCall, onOpenAddPeoplePicker, onOpenFilePicker, onOpenCameraPicker }) => {
-    const { user, updateUser, sendMessage, areCaptionsEnabled, setAreCaptionsEnabled } = useAppContext();
+export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCall, onOpenAddPeoplePicker, onOpenFilePicker, onOpenCameraPicker, onOpenForwardPicker }) => {
+    const { user, updateUser, sendMessage, areCaptionsEnabled, setAreCaptionsEnabled, chats, getContactById, deleteMessage } = useAppContext();
     const { meeting, participants, initialSettings } = callState;
 
     const [startTime] = useState(Date.now());
@@ -543,11 +581,10 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
     const captionClearTimeoutRef = useRef<number | null>(null);
 
     // UI State
-    const [activePanel, setActivePanel] = useState<'chat' | 'people' | null>(null);
-    const [showEffectsPanel, setShowEffectsPanel] = useState(false);
+    const [activeSidePanel, setActiveSidePanel] = useState<'chat' | 'people' | 'effects' | null>(null);
     const [activeParticipants, setActiveParticipants] = useState<User[]>([...participants]);
     const [viewingTranscript, setViewingTranscript] = useState<TranscriptInfo | null>(null);
-
+    const [mediaToView, setMediaToView] = useState<{ messages: Message[]; startIndex: number } | null>(null);
 
     // Media Streams
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -556,6 +593,28 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
     const screenVideoRef = useRef<HTMLVideoElement>(null);
 
     const activeStream = isScreenSharing ? screenStreamRef.current : localStream;
+
+    useEffect(() => {
+        const chat = chats.find(c => c.id === meeting.chatId);
+        if (chat) {
+            const chatParticipantIds = new Set(chat.participants);
+            const activeParticipantIds = new Set(activeParticipants.map(p => p.id));
+            
+            const newParticipantIds = [...chatParticipantIds].filter(id => !activeParticipantIds.has(id));
+            
+            if (newParticipantIds.length > 0) {
+                const newUsers = newParticipantIds.map(id => getContactById(id)).filter((u): u is User => !!u);
+                setActiveParticipants(prev => [...prev, ...newUsers.map(u => ({...u, isMuted: true, isCameraOn: false, isHandRaised: false}))]);
+            }
+        }
+    }, [chats, meeting.chatId, activeParticipants, getContactById]);
+
+    const handleMuteParticipant = useCallback((participantId: string) => {
+        if (participantId === user.id) return;
+        setActiveParticipants(prev => prev.map(p => 
+            p.id === participantId ? { ...p, isMuted: true } : p
+        ));
+    }, [user.id]);
     
     const currentUserInCall = useMemo(() => ({
         ...user,
@@ -566,9 +625,12 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
 
     // Combine current user with other participants for the grid
     const allDisplayParticipants = useMemo(() => {
-        const otherParticipants = activeParticipants.filter(p => p.id !== user.id);
-        return [currentUserInCall, ...otherParticipants];
-    }, [currentUserInCall, activeParticipants]);
+        const others = activeParticipants.filter(p => p.id !== user.id);
+        const participantMap = new Map<string, User>();
+        participantMap.set(currentUserInCall.id, currentUserInCall);
+        others.forEach(p => participantMap.set(p.id, p));
+        return Array.from(participantMap.values());
+    }, [activeParticipants, currentUserInCall, user.id]);
 
 
     useEffect(() => {
@@ -601,11 +663,14 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
     
     const sendTranscript = useCallback(() => {
         if (finalTranscriptRef.current.length > 0) {
-            sendMessage(meeting.chatId, {
-                senderId: user.id,
-                content: 'Meeting Transcript',
-                type: 'transcript',
-                transcriptInfo: { title: meeting.title, entries: finalTranscriptRef.current }
+            sendMessage({
+                chatId: meeting.chatId, 
+                message: {
+                    senderId: user.id,
+                    content: 'Meeting Transcript',
+                    type: 'transcript',
+                    transcriptInfo: { title: meeting.title, entries: finalTranscriptRef.current }
+                }
             });
         }
         finalTranscriptRef.current = [];
@@ -638,7 +703,7 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
             const newState = !prev;
             localStream?.getVideoTracks().forEach(track => { track.enabled = newState; });
             if (!newState) { // If turning camera off, also close effects panel
-                setShowEffectsPanel(false);
+                setActiveSidePanel(current => current === 'effects' ? null : current);
             }
             return newState;
         });
@@ -677,18 +742,22 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
 
 
     const handleTogglePanel = useCallback((panel: 'chat' | 'people') => {
-        setActivePanel(prev => {
-            const newPanel = prev === panel ? null : panel;
-            if(newPanel && showEffectsPanel) setShowEffectsPanel(false);
-            return newPanel;
+        setActiveSidePanel(prev => {
+            if (prev === 'effects') {
+                return panel;
+            }
+            if (prev === panel) {
+                return null;
+            }
+            return panel;
         });
-    }, [showEffectsPanel]);
+    }, []);
 
     const handleToggleRaiseHand = useCallback(() => setIsHandRaised(p => !p), []);
+    
     const handleToggleEffects = useCallback(() => {
-        setShowEffectsPanel(p => !p)
-        if (activePanel) setActivePanel(null);
-    }, [activePanel]);
+        setActiveSidePanel(prev => (prev === 'effects' ? null : 'effects'));
+    }, []);
 
     const onToggleRecording = useCallback(() => {
         if (isRecording) {
@@ -717,16 +786,19 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         const url = e.target?.result as string;
-                        sendMessage(meeting.chatId, {
-                            senderId: user.id,
-                            content: 'Shared a meeting recording.',
-                            type: 'file',
-                            fileInfo: {
-                                name: `recording-${new Date().toISOString()}.webm`,
-                                size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
-                                url,
-                                type: 'video/webm',
-                            },
+                        sendMessage({
+                            chatId: meeting.chatId,
+                            message: {
+                                senderId: user.id,
+                                content: 'Shared a meeting recording.',
+                                type: 'file',
+                                fileInfo: {
+                                    name: `recording-${new Date().toISOString()}.webm`,
+                                    size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+                                    url,
+                                    type: 'video/webm',
+                                },
+                            }
                         });
                     };
                     reader.readAsDataURL(blob);
@@ -859,18 +931,45 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
         }
     }, [debouncedLiveText, isTranslationEnabled, targetLanguage]);
     
+    // --- Media Viewer Logic ---
+    const chat = chats.find(c => c.id === meeting.chatId);
+    const imageMessages = useMemo(() => chat ? chat.messages.filter(isImageMessage) : [], [chat]);
+
+    const handleImageClick = useCallback((clickedMessage: Message) => {
+        const startIndex = imageMessages.findIndex(m => m.id === clickedMessage.id);
+        if (startIndex !== -1) {
+            setMediaToView({ messages: imageMessages, startIndex });
+        }
+    }, [imageMessages]);
+
+    const handleDeleteMessageFromViewer = useCallback((messageId: string, forEveryone: boolean) => {
+        deleteMessage({ chatId: meeting.chatId, messageId, forEveryone });
+        setMediaToView(prev => {
+            if (!prev) return null;
+            const newMessages = prev.messages.filter(m => m.id !== messageId);
+            if (newMessages.length === 0) return null;
+            const newIndex = Math.min(prev.startIndex, newMessages.length - 1);
+            return { messages: newMessages, startIndex: newIndex };
+        });
+    }, [deleteMessage, meeting.chatId]);
+
+    const handleForwardMessageFromViewer = useCallback((messageId: string) => {
+        onOpenForwardPicker(meeting.chatId, [messageId]);
+        setMediaToView(null);
+    }, [onOpenForwardPicker, meeting.chatId]);
+
     return (
-        <div className="w-screen h-screen bg-black text-white flex flex-col">
+        <div className="absolute inset-0 z-40 w-screen h-screen bg-black text-white flex flex-col">
             <MeetingControlBar
                 startTime={startTime}
-                participantCount={activeParticipants.length}
+                participantCount={allDisplayParticipants.length}
                 isMicOn={isMicOn} onToggleMic={handleToggleMic}
                 isCameraOn={isCameraOn} onToggleCamera={handleToggleCamera}
                 isScreenSharing={isScreenSharing} onToggleScreenShare={handleToggleScreenShare}
-                activePanel={activePanel} onTogglePanel={handleTogglePanel}
+                activePanel={activeSidePanel === 'chat' || activeSidePanel === 'people' ? activeSidePanel : null} onTogglePanel={handleTogglePanel}
                 isHandRaised={isHandRaised} onToggleRaiseHand={handleToggleRaiseHand}
                 isRecording={isRecording} onToggleRecording={onToggleRecording}
-                onToggleEffects={handleToggleEffects}
+                onToggleEffects={handleToggleEffects} isEffectsPanelActive={activeSidePanel === 'effects'}
                 areCaptionsEnabled={areCaptionsEnabled} onToggleCaptions={onToggleCaptions}
                 isTranslationEnabled={isTranslationEnabled} onToggleTranslation={onToggleTranslation}
                 onShowEmojis={() => {}}
@@ -879,7 +978,16 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
             {viewingTranscript && (
                 <TranscriptViewerModal transcriptInfo={viewingTranscript} onClose={() => setViewingTranscript(null)} />
             )}
-            <main className="flex-1 flex min-h-0 relative">
+            {mediaToView && (
+                <MediaViewer
+                    messages={mediaToView.messages}
+                    initialIndex={mediaToView.startIndex}
+                    onClose={() => setMediaToView(null)}
+                    onDelete={handleDeleteMessageFromViewer}
+                    onForward={handleForwardMessageFromViewer}
+                />
+            )}
+            <main className="flex-1 flex min-h-0 relative overflow-hidden">
                  <div className="flex-1 flex flex-col p-2 md:p-4 overflow-y-auto min-w-0">
                     {isScreenSharing ? (
                         <div className="w-full h-full bg-black flex items-center justify-center">
@@ -912,31 +1020,33 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                         )}
                     </div>
                  )}
-                 {activePanel === 'chat' && (
+                 <div className={`absolute top-0 right-0 h-full z-30 transition-transform duration-300 ease-in-out ${activeSidePanel === 'chat' ? 'translate-x-0' : 'translate-x-full'}`}>
                     <MeetingChatPanel 
                         chatId={meeting.chatId} 
-                        onClose={() => setActivePanel(null)} 
+                        onClose={() => setActiveSidePanel(null)} 
                         onOpenFilePicker={onOpenFilePicker}
                         onOpenCameraPicker={onOpenCameraPicker}
                         onViewTranscript={setViewingTranscript}
+                        onImageClick={handleImageClick}
                     />
-                 )}
-                {activePanel === 'people' && (
+                 </div>
+                <div className={`absolute top-0 right-0 h-full z-30 transition-transform duration-300 ease-in-out ${activeSidePanel === 'people' ? 'translate-x-0' : 'translate-x-full'}`}>
                     <MeetingPeoplePanel 
                         meetingParticipants={meeting.participants} 
-                        activeParticipants={activeParticipants}
-                        onClose={() => setActivePanel(null)}
+                        activeParticipants={allDisplayParticipants}
+                        onClose={() => setActiveSidePanel(null)}
                         onAddPeople={() => onOpenAddPeoplePicker(meeting.chatId, activeParticipants)}
+                        handleMuteParticipant={handleMuteParticipant}
                     />
-                )}
-                 {showEffectsPanel && (
+                </div>
+                 <div className={`absolute top-0 right-0 h-full z-30 transition-transform duration-300 ease-in-out ${activeSidePanel === 'effects' ? 'translate-x-0' : 'translate-x-full'}`}>
                     <EffectsPanel 
                         currentEffect={backgroundEffect}
                         currentWallpaper={wallpaperUrl}
                         onChange={(effect, url) => { setBackgroundEffect(effect); setWallpaperUrl(url); }}
-                        onClose={() => setShowEffectsPanel(false)}
+                        onClose={() => setActiveSidePanel(null)}
                     />
-                 )}
+                 </div>
             </main>
         </div>
     );

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Meeting, RecurrenceFrequency, MeetingParticipant, User, UserStatus } from '../types';
@@ -250,7 +251,7 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({ meet
         };
 
         if (isEditing && meeting) {
-            const updatedMeeting = updateMeeting(meeting.id, meetingData);
+            const updatedMeeting = updateMeeting({ meetingId: meeting.id, updatedDetails: meetingData });
             onClose(updatedMeeting || null, false);
         } else {
             const newMeeting = scheduleMeeting(meetingData);

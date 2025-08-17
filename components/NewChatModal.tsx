@@ -53,7 +53,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ onClose }) => {
             setActiveChatId(chatId);
         } else {
             const finalGroupName = groupName.trim() || [user, ...selectedUsers].slice(0, 3).map(u => u.name.split(' ')[0]).join(', ');
-            createGroupChat(finalGroupName, selectedUsers.map(u => u.id));
+            createGroupChat({ name: finalGroupName, participantIds: selectedUsers.map(u => u.id) });
         }
         
         setActiveFeature('chat');

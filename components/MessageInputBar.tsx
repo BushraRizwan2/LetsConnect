@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Message } from '../types';
@@ -97,16 +96,19 @@ const MessageInputBar: React.FC<MessageInputBarProps> = ({
             textareaRef.current.style.height = 'auto';
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
-        setCurrentUserTyping(chatId, !!e.target.value);
+        setCurrentUserTyping({ chatId, isTyping: !!e.target.value });
     };
 
     const handleSend = useCallback(() => {
         if (!text.trim()) return;
-        sendMessage(chatId, {
-            senderId: user.id,
-            content: text,
-            type: 'text',
-            replyTo: replyTo?.id
+        sendMessage({
+            chatId, 
+            message: {
+                senderId: user.id,
+                content: text,
+                type: 'text',
+                replyTo: replyTo?.id
+            }
         });
         setText('');
         onCancelReply();
@@ -141,10 +143,13 @@ const MessageInputBar: React.FC<MessageInputBarProps> = ({
     );
 
     const handleGifOrStickerSelect = (url: string) => {
-        sendMessage(chatId, {
-            senderId: user.id,
-            content: url,
-            type: 'image'
+        sendMessage({
+            chatId,
+            message: {
+                senderId: user.id,
+                content: url,
+                type: 'image'
+            }
         });
         setIsEmojiPickerOpen(false);
     };
@@ -161,7 +166,7 @@ const MessageInputBar: React.FC<MessageInputBarProps> = ({
                         value={text}
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}
-                        onBlur={() => setCurrentUserTyping(chatId, false)}
+                        onBlur={() => setCurrentUserTyping({ chatId, isTyping: false })}
                         placeholder="Type a message..."
                         className="w-full bg-primary rounded-xl p-3 pr-24 resize-none max-h-40 focus:outline-none focus:ring-2 focus:ring-highlight"
                         rows={1}

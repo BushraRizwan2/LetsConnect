@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Sidebar } from './Sidebar';
 import ChatWindow from './ChatWindow';
@@ -24,7 +25,7 @@ import { TimesheetView } from './TimesheetView';
 import { NewChatModal } from './NewChatModal';
 import { useAppContext } from '../context/AppContext';
 import { User, LocationInfo, Meeting, PreJoinSettings, CallState, RecurrenceFrequency, Chat, ActiveFeature } from '../types';
-import { CameraIcon, ChevronLeftIcon, UserCircleIcon, VideoCameraIcon, XIcon, LocationMarkerIcon, ForwardIcon, ShareIcon, CheckIcon, UserPlusIcon, PhoneIcon } from './icons';
+import { CameraIcon, ChevronLeftIcon, UserCircleIcon, VideoCameraIcon, XIcon, LocationMarkerIcon, ShareIcon, CheckIcon, UserPlusIcon, PhoneIcon } from './icons';
 import { callSound, notificationSound } from '../data/audio';
 
 interface PendingCallInfo {
@@ -404,15 +405,18 @@ const Layout: React.FC = () => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const url = e.target?.result as string;
-                sendMessage(filePickerChatId, {
-                    senderId: user.id,
-                    content: `Shared a file: ${file.name}`,
-                    type: 'file',
-                    fileInfo: {
-                        name: file.name,
-                        size: formatFileSize(file.size),
-                        url: url,
-                        type: file.type,
+                sendMessage({
+                    chatId: filePickerChatId,
+                    message: {
+                        senderId: user.id,
+                        content: `Shared a file: ${file.name}`,
+                        type: 'file',
+                        fileInfo: {
+                            name: file.name,
+                            size: formatFileSize(file.size),
+                            url: url,
+                            type: file.type,
+                        }
                     }
                 });
             };
@@ -443,10 +447,13 @@ const Layout: React.FC = () => {
 
     const handleCapture = (dataUrl: string) => {
         if (!activeChatId) return;
-        sendMessage(activeChatId, {
-            senderId: user.id,
-            content: dataUrl,
-            type: 'image',
+        sendMessage({
+            chatId: activeChatId,
+            message: {
+                senderId: user.id,
+                content: dataUrl,
+                type: 'image',
+            }
         });
         setShowCameraView(false);
     };
@@ -454,11 +461,14 @@ const Layout: React.FC = () => {
     const handleOpenContactPicker = () => setShowContactPicker(true);
     const handleSelectContact = (contact: User) => {
         if (!activeChatId) return;
-        sendMessage(activeChatId, {
-            senderId: user.id,
-            content: `Contact: ${contact.name}`,
-            type: 'contact',
-            contactInfo: { id: contact.id, name: contact.name, avatar: contact.avatar }
+        sendMessage({
+            chatId: activeChatId,
+            message: {
+                senderId: user.id,
+                content: `Contact: ${contact.name}`,
+                type: 'contact',
+                contactInfo: { id: contact.id, name: contact.name, avatar: contact.avatar }
+            }
         });
         setShowContactPicker(false);
     };
@@ -466,25 +476,32 @@ const Layout: React.FC = () => {
     const handleOpenLocationPicker = () => setShowLocationPicker(true);
     const handleSelectLocation = (location: LocationInfo) => {
          if (!activeChatId) return;
-         sendMessage(activeChatId, {
-            senderId: user.id,
-            content: location.address || `Location`,
-            type: 'location',
-            locationInfo: location
+         sendMessage({
+            chatId: activeChatId,
+            message: {
+                senderId: user.id,
+                content: location.address || `Location`,
+                type: 'location',
+                locationInfo: location
+            }
          });
          setShowLocationPicker(false);
     };
 
     const handleForward = (targetChatIds: string[]) => {
         if (forwardPickerProps) {
-            forwardMessages(forwardPickerProps.sourceChatId, targetChatIds, forwardPickerProps.messageIds);
+            forwardMessages({
+                sourceChatId: forwardPickerProps.sourceChatId,
+                targetChatIds,
+                messageIds: forwardPickerProps.messageIds
+            });
         }
         setForwardPickerProps(null);
     };
     
     const handleShareContact = (targetChatIds: string[]) => {
         if (shareContactPickerUser) {
-            shareContact(targetChatIds, shareContactPickerUser);
+            shareContact({ chatIdsToShareIn: targetChatIds, contactToShare: shareContactPickerUser });
         }
         setShareContactPickerUser(null);
     };
@@ -552,14 +569,17 @@ const Layout: React.FC = () => {
     
     const handleEndCall = (durationInSeconds: number) => {
         if (activeCallState) {
-            sendMessage(activeCallState.meeting.chatId, {
-                senderId: user.id,
-                content: 'Meeting ended',
-                type: 'call',
-                callInfo: {
-                    type: 'outgoing',
-                    duration: durationInSeconds,
-                    callMethod: activeCallState.initialSettings.isCameraOn ? 'video' : 'audio',
+            sendMessage({
+                chatId: activeCallState.meeting.chatId,
+                message: {
+                    senderId: user.id,
+                    content: 'Meeting ended',
+                    type: 'call',
+                    callInfo: {
+                        type: 'outgoing',
+                        duration: durationInSeconds,
+                        callMethod: activeCallState.initialSettings.isCameraOn ? 'video' : 'audio',
+                    }
                 }
             });
         }
@@ -583,7 +603,7 @@ const Layout: React.FC = () => {
             currentParticipants, 
             onAdd: (emails) => {
                 const userIds = emails.map(email => findOrCreateContactByEmail(email).id);
-                addParticipant(chatId, userIds);
+                addParticipant({ chatId, userIds });
                 setPeoplePickerProps(null);
             }
         });
@@ -596,43 +616,6 @@ const Layout: React.FC = () => {
         setActiveChatId(chatId);
         setActiveFeature('chat');
     };
-
-    if (activeCallState || preJoinLobbyState) {
-        return (
-            <div className="flex h-screen bg-secondary">
-                {activeCallState && (
-                    <MeetingScreen 
-                        callState={activeCallState}
-                        onEndCall={handleEndCall}
-                        onOpenAddPeoplePicker={handleOpenAddPeoplePicker}
-                        onOpenFilePicker={handleOpenFilePicker}
-                        onOpenCameraPicker={handleOpenChatWindowCamera}
-                    />
-                )}
-                {preJoinLobbyState && (
-                     <PreJoinScreen
-                        onClose={() => setPreJoinLobbyState(null)}
-                        onJoin={(settings: PreJoinSettings) => {
-                            sendMessage(preJoinLobbyState.meeting.chatId, {
-                                senderId: 'system',
-                                content: 'Meeting started',
-                                type: 'text'
-                            });
-                            setActiveCallState({
-                                meeting: preJoinLobbyState.meeting,
-                                participants: preJoinLobbyState.participants,
-                                initialSettings: settings,
-                            });
-                            setPreJoinLobbyState(null);
-                        }}
-                        meetingTitle={preJoinLobbyState.meeting.title}
-                        initialAudioOn={true}
-                        initialVideoOn={preJoinLobbyState.callType === 'video'}
-                    />
-                )}
-            </div>
-        );
-    }
     
     const activeChat = chats.find(c => c.id === activeChatId);
     const showContentPanel = ['chat', 'calls', 'contacts', 'calendar', 'timesheet'].includes(activeFeature);
@@ -731,7 +714,7 @@ const Layout: React.FC = () => {
       {showCameraView && <CameraView onClose={() => setShowCameraView(false)} onCapture={handleCapture} />}
       {showContactPicker && <ContactPicker onClose={() => setShowContactPicker(false)} onSelect={handleSelectContact} />}
       {showLocationPicker && <LocationPicker onClose={() => setShowLocationPicker(false)} onSelect={handleSelectLocation} />}
-      {forwardPickerProps && <ChatPicker allowMultiSelect title="Forward to..." actionLabel="Forward" icon={ForwardIcon} chats={chats} onClose={() => setForwardPickerProps(null)} onAction={handleForward} />}
+      {forwardPickerProps && <ChatPicker allowMultiSelect title="Forward to..." actionLabel="Forward" icon={ShareIcon} chats={chats} onClose={() => setForwardPickerProps(null)} onAction={handleForward} />}
       {shareContactPickerUser && <ChatPicker allowMultiSelect title={`Share ${shareContactPickerUser.name}`} actionLabel="Share" icon={ShareIcon} chats={chats} onClose={() => setShareContactPickerUser(null)} onAction={handleShareContact} />}
       {scheduleMeetingProps && <ScheduleMeetingModal {...scheduleMeetingProps} onClose={handleScheduleMeetingClose} onJoin={handleJoinMeeting} onOpenChat={handleOpenChatFromModal} />}
       {showJoinMeetingModal && <JoinMeetingModal onClose={() => setShowJoinMeetingModal(false)} onJoin={(id) => { const result = getMeetingById(id); if (result) { handleJoinMeeting(result.meeting); setShowJoinMeetingModal(false); } else { alert('Meeting not found'); } }} />}
@@ -745,6 +728,44 @@ const Layout: React.FC = () => {
           if (!result) return null;
           return <MeetingStartingNotification key={id} meeting={result.meeting} onJoin={handleJoinMeeting} onDismiss={(id) => setDismissedNotifications(p => [...p, id])} />;
       })}
+
+      {/* Call/Meeting Overlays */}
+      {activeCallState && (
+          <MeetingScreen 
+              key={activeCallState.sessionId}
+              callState={activeCallState}
+              onEndCall={handleEndCall}
+              onOpenAddPeoplePicker={handleOpenAddPeoplePicker}
+              onOpenFilePicker={handleOpenFilePicker}
+              onOpenCameraPicker={handleOpenChatWindowCamera}
+              onOpenForwardPicker={(sourceChatId, messageIds) => setForwardPickerProps({ sourceChatId, messageIds })}
+          />
+      )}
+      {preJoinLobbyState && (
+            <PreJoinScreen
+              onClose={() => setPreJoinLobbyState(null)}
+              onJoin={(settings: PreJoinSettings) => {
+                  sendMessage({
+                      chatId: preJoinLobbyState.meeting.chatId,
+                      message: {
+                        senderId: 'system',
+                        content: 'Meeting started',
+                        type: 'text'
+                      }
+                  });
+                  setActiveCallState({
+                      meeting: preJoinLobbyState.meeting,
+                      participants: preJoinLobbyState.participants,
+                      initialSettings: settings,
+                      sessionId: Date.now(),
+                  });
+                  setPreJoinLobbyState(null);
+              }}
+              meetingTitle={preJoinLobbyState.meeting.title}
+              initialAudioOn={true}
+              initialVideoOn={preJoinLobbyState.callType === 'video'}
+          />
+      )}
     </div>
   );
 };

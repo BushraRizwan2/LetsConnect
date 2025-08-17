@@ -102,6 +102,16 @@
         animation: ping-once 1.5s ease-out forwards;
       }
 
+      /* Slow pulse for avatar background */
+      @keyframes pulse-slow {
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .animate-pulse-slow {
+        animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+
       /* Custom Scrollbar Styles */
       /* For Webkit-based browsers (Chrome, Safari, Edge) */
       ::-webkit-scrollbar {

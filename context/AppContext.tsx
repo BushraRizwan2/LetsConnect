@@ -15,28 +15,28 @@ interface AppContextType {
   setActiveChatId: (id: string | null) => void;
   getContactById: (id: string) => User | undefined;
   getChatById: (id: string) => Chat | undefined;
-  sendMessage: (chatId: string, message: Omit<Message, 'id' | 'timestamp' | 'read'>) => void;
+  sendMessage: (params: { chatId: string, message: Omit<Message, 'id' | 'timestamp' | 'read'> }) => void;
   updateUserStatus: (status: UserStatus) => void;
-  deleteMessage: (chatId: string, messageId: string, forEveryone: boolean) => void;
-  editMessage: (chatId: string, messageId: string, newContent: string) => void;
-  toggleReaction: (chatId: string, messageId: string, emoji: string) => void;
-  getMessageById: (chatId: string, messageId: string) => Message | undefined;
+  deleteMessage: (params: { chatId: string, messageId: string, forEveryone: boolean }) => void;
+  editMessage: (params: { chatId: string, messageId: string, newContent: string }) => void;
+  toggleReaction: (params: { chatId: string, messageId: string, emoji: string }) => void;
+  getMessageById: (params: { chatId: string, messageId: string }) => Message | undefined;
   updateUserName: (name: string) => void;
-  updateContactName: (contactId: string, name: string) => void;
-  updateChatName: (chatId: string, name: string) => void;
+  updateContactName: (params: { contactId: string, name: string }) => void;
+  updateChatName: (params: { chatId: string, name: string }) => void;
   toggleFavorite: (chatId: string) => void;
-  forwardMessages: (sourceChatId: string, targetChatIds: string[], messageIds: string[]) => void;
+  forwardMessages: (params: { sourceChatId: string, targetChatIds: string[], messageIds: string[] }) => void;
   toggleMuteChat: (chatId:string) => void;
   hideChat: (chatId: string) => void;
   deleteChat: (chatId: string) => void;
   leaveGroup: (chatId: string) => void;
   toggleBlockContact: (contactId: string) => void;
-  markChatAsRead: (chatId: string, read: boolean) => void;
-  shareContact: (chatIdsToShareIn: string[], contactToShare: User) => void;
+  markChatAsRead: (params: { chatId: string, read: boolean }) => void;
+  shareContact: (params: { chatIdsToShareIn: string[], contactToShare: User }) => void;
   updateUserCustomStatus: (message: string) => void;
-  logCall: (chatId: string, callDetails: Pick<Message, 'callInfo' | 'senderId'>) => void;
+  logCall: (params: { chatId: string, callDetails: Pick<Message, 'callInfo' | 'senderId'> }) => void;
   updateUserAvatar: (avatarUrl: string | null) => void;
-  addParticipant: (chatId: string, userIds: string[]) => void;
+  addParticipant: (params: { chatId: string, userIds: string[] }) => void;
   createChat: (partnerId: string) => void;
   getOrCreatePrivateChat: (partnerId: string) => string;
   addContact: (contact: Partial<User> & { name: string; email: string; }) => User | null;
@@ -44,25 +44,25 @@ interface AppContextType {
   updateUser: (updates: Partial<User>) => void;
   logout: () => void;
   copyToClipboard: (text: string) => void;
-  togglePinMessage: (chatId: string, messageId: string) => void;
-  replyPrivately: (sourceChatId: string, messageId: string) => void;
+  togglePinMessage: (params: { chatId: string, messageId: string }) => void;
+  replyPrivately: (params: { sourceChatId: string, messageId: string }) => void;
   pendingPrivateReply: { chatId: string, messageId: string } | null;
   clearPendingPrivateReply: () => void;
   typingStatus: Record<string, { userId: string, name: string } | null>;
-  setCurrentUserTyping: (chatId: string, isTyping: boolean) => void;
-  deleteMessages: (chatId: string, messageIds: string[]) => void;
+  setCurrentUserTyping: (params: { chatId: string, isTyping: boolean }) => void;
+  deleteMessages: (params: { chatId: string, messageIds: string[] }) => void;
   deleteCallLogs: (messageIds: string[]) => void;
   archiveChat: (chatId: string) => void;
-  createGroupChat: (name: string, participantIds: string[]) => void;
+  createGroupChat: (params: { name: string, participantIds: string[] }) => void;
   scheduleMeeting: (meetingDetails: Omit<Meeting, 'id' | 'organizerId' | 'chatId'>) => Meeting;
-  updateMeeting: (meetingId: string, updatedDetails: Partial<Meeting>) => Meeting | undefined;
+  updateMeeting: (params: { meetingId: string, updatedDetails: Partial<Meeting> }) => Meeting | undefined;
   cancelMeeting: (meetingId: string) => void;
   getMeetingById: (meetingId: string) => { meeting: Meeting; chat: Chat; } | undefined;
   createInstantMeeting: () => Meeting;
   findOrCreateContactByEmail: (email: string) => User;
   updateChatDescription: (chatId: string, description: string) => void;
-  updateChatAvatar: (chatId: string, avatarUrl: string) => void;
-  updateChatCoverPhoto: (chatId: string, coverPhotoUrl: string) => void;
+  updateChatAvatar: (params: { chatId: string, avatarUrl: string }) => void;
+  updateChatCoverPhoto: (params: { chatId: string, coverPhotoUrl: string }) => void;
   // Timesheet specific
   timesheets: Timesheet[];
   leaveRequests: LeaveRequest[];
@@ -79,7 +79,7 @@ interface AppContextType {
   areCaptionsEnabled: boolean;
   setAreCaptionsEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   // Activity specific
-  markActivityAsRead: (activityId: string, read: boolean) => void;
+  markActivityAsRead: (params: { activityId: string, read: boolean }) => void;
   removeActivity: (activityId: string) => void;
 }
 
@@ -209,12 +209,12 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     return chats.find(c => c.id === chatId);
   }, [chats]);
 
-  const getMessageById = useCallback((chatId: string, messageId: string): Message | undefined => {
+  const getMessageById = useCallback(({ chatId, messageId }: { chatId: string, messageId: string }): Message | undefined => {
     const chat = chats.find(c => c.id === chatId);
     return chat?.messages.find(m => m.id === messageId);
   }, [chats]);
   
-  const markActivityAsRead = useCallback((activityId: string, read: boolean) => {
+  const markActivityAsRead = useCallback(({ activityId, read }: { activityId: string, read: boolean }) => {
     setReadActivityIds(prev => {
         const newSet = new Set(prev);
         if (read) {
@@ -253,7 +253,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
                 }
 
                 // Reply
-                const repliedToMessage = message.replyTo ? getMessageById(chat.id, message.replyTo) : undefined;
+                const repliedToMessage = message.replyTo ? getMessageById({chatId: chat.id, messageId: message.replyTo}) : undefined;
                 if (message.senderId !== currentUserId && repliedToMessage && repliedToMessage.senderId === currentUserId) {
                     generatedActivities.push({
                         id: `activity-${message.id}-reply`,
@@ -347,7 +347,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
 
   }, [chats, user, getMessageById, readActivityIds, removedActivityIds]);
 
-  const sendMessage = useCallback((chatId: string, message: Omit<Message, 'id' | 'timestamp' | 'read'>) => {
+  const sendMessage = useCallback(({ chatId, message }: { chatId: string, message: Omit<Message, 'id' | 'timestamp' | 'read'> }) => {
     setChats(prevChats => prevChats.map(chat => {
         if (chat.id === chatId) {
             const replyToMessage = message.replyTo ? chat.messages.find(m => m.id === message.replyTo) : undefined;
@@ -374,7 +374,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     setUser(prev => ({ ...prev, status }));
   }, []);
 
-  const deleteMessage = useCallback((chatId: string, messageId: string, forEveryone: boolean) => {
+  const deleteMessage = useCallback(({ chatId, messageId, forEveryone }: { chatId: string, messageId: string, forEveryone: boolean }) => {
       setChats(prev => prev.map(chat => {
           if (chat.id !== chatId) return chat;
           return {
@@ -390,7 +390,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       }));
   }, [user.id]);
   
-  const editMessage = useCallback((chatId: string, messageId: string, newContent: string) => {
+  const editMessage = useCallback(({ chatId, messageId, newContent }: { chatId: string, messageId: string, newContent: string }) => {
       setChats(prev => prev.map(chat => {
           if (chat.id !== chatId) return chat;
           return {
@@ -403,7 +403,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       }));
   }, []);
   
-  const toggleReaction = useCallback((chatId: string, messageId: string, emoji: string) => {
+  const toggleReaction = useCallback(({ chatId, messageId, emoji }: { chatId: string, messageId: string, emoji: string }) => {
       setChats(prev => prev.map(chat => {
           if (chat.id !== chatId) return chat;
           
@@ -459,11 +459,11 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     setUser(prev => ({ ...prev, name }));
   }, []);
 
-  const updateContactName = useCallback((contactId: string, name: string) => {
+  const updateContactName = useCallback(({ contactId, name }: { contactId: string, name: string }) => {
     setContacts(prev => prev.map(c => c.id === contactId ? { ...c, name } : c));
   }, []);
 
-  const updateChatName = useCallback((chatId: string, name: string) => {
+  const updateChatName = useCallback(({ chatId, name }: { chatId: string, name: string }) => {
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, name } : c));
   }, []);
 
@@ -471,11 +471,11 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, description } : c));
   }, []);
   
-  const updateChatAvatar = useCallback((chatId: string, avatarUrl: string) => {
+  const updateChatAvatar = useCallback(({ chatId, avatarUrl }: { chatId: string, avatarUrl: string }) => {
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, avatar: avatarUrl } : c));
   }, []);
 
-  const updateChatCoverPhoto = useCallback((chatId: string, coverPhotoUrl: string) => {
+  const updateChatCoverPhoto = useCallback(({ chatId, coverPhotoUrl }: { chatId: string, coverPhotoUrl: string }) => {
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, coverPhoto: coverPhotoUrl } : c));
   }, []);
 
@@ -484,7 +484,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, isFavorite: !c.isFavorite } : c));
   }, []);
 
-  const forwardMessages = useCallback((sourceChatId: string, targetChatIds: string[], messageIds: string[]) => {
+  const forwardMessages = useCallback(({ sourceChatId, targetChatIds, messageIds }: { sourceChatId: string, targetChatIds: string[], messageIds: string[] }) => {
       const sourceChat = chats.find(c => c.id === sourceChatId);
       if (!sourceChat) return;
 
@@ -558,7 +558,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       setContacts(prev => prev.map(c => c.id === contactId ? { ...c, isBlocked: !c.isBlocked } : c));
   }, []);
 
-  const markChatAsRead = useCallback((chatId: string, read: boolean) => {
+  const markChatAsRead = useCallback(({ chatId, read }: { chatId: string, read: boolean }) => {
     setChats(prev => prev.map(chat => {
       if (chat.id !== chatId) return chat;
       const lastMessage = chat.messages[chat.messages.length - 1];
@@ -572,16 +572,19 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     }));
   }, [user.id]);
 
-  const shareContact = useCallback((chatIdsToShareIn: string[], contactToShare: User) => {
+  const shareContact = useCallback(({ chatIdsToShareIn, contactToShare }: { chatIdsToShareIn: string[], contactToShare: User }) => {
       chatIdsToShareIn.forEach(chatId => {
-        sendMessage(chatId, {
-            senderId: user.id,
-            content: `Contact card for ${contactToShare.name}`,
-            type: 'contact',
-            contactInfo: {
-                id: contactToShare.id,
-                name: contactToShare.name,
-                avatar: contactToShare.avatar
+        sendMessage({
+            chatId,
+            message: {
+                senderId: user.id,
+                content: `Contact card for ${contactToShare.name}`,
+                type: 'contact',
+                contactInfo: {
+                    id: contactToShare.id,
+                    name: contactToShare.name,
+                    avatar: contactToShare.avatar
+                }
             }
         });
       });
@@ -591,11 +594,14 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       setUser(prev => ({ ...prev, customStatusMessage: message }));
   }, []);
 
-  const logCall = useCallback((chatId: string, callDetails: Pick<Message, 'callInfo' | 'senderId'>) => {
-      sendMessage(chatId, {
-          ...callDetails,
-          type: 'call',
-          content: callDetails.callInfo?.type === 'missed' ? 'Missed call' : 'Call'
+  const logCall = useCallback(({ chatId, callDetails }: { chatId: string, callDetails: Pick<Message, 'callInfo' | 'senderId'> }) => {
+      sendMessage({
+          chatId,
+          message: {
+              ...callDetails,
+              type: 'call',
+              content: callDetails.callInfo?.type === 'missed' ? 'Missed call' : 'Call'
+          }
       });
   }, [sendMessage]);
 
@@ -622,7 +628,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     return newContact;
   }, [contacts, user]);
 
-  const addParticipant = useCallback((chatId: string, userIds: string[]) => {
+  const addParticipant = useCallback(({ chatId, userIds }: { chatId: string, userIds: string[] }) => {
       setChats(prev => prev.map(chat => {
           if (chat.id === chatId && chat.type === 'group') {
               const newParticipants = userIds.filter(id => !chat.participants.includes(id));
@@ -700,7 +706,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       navigator.clipboard.writeText(text).catch(err => console.error('Failed to copy text: ', err));
   }, []);
   
-  const togglePinMessage = useCallback((chatId: string, messageId: string) => {
+  const togglePinMessage = useCallback(({ chatId, messageId }: { chatId: string, messageId: string }) => {
       setChats(prev => prev.map(chat => {
           if (chat.id !== chatId) return chat;
           const pinned = chat.pinnedMessages || [];
@@ -711,8 +717,8 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       }));
   }, []);
   
-  const replyPrivately = useCallback((sourceChatId: string, messageId: string) => {
-      const sourceMessage = getMessageById(sourceChatId, messageId);
+  const replyPrivately = useCallback(({ sourceChatId, messageId }: { sourceChatId: string, messageId: string }) => {
+      const sourceMessage = getMessageById({ chatId: sourceChatId, messageId });
       if (!sourceMessage) return;
       
       const partnerId = sourceMessage.senderId;
@@ -726,7 +732,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       setPendingPrivateReply(null);
   }, []);
   
-  const setCurrentUserTyping = useCallback((chatId: string, isTyping: boolean) => {
+  const setCurrentUserTyping = useCallback(({ chatId, isTyping }: { chatId: string, isTyping: boolean }) => {
     setTypingStatus(prev => {
         const newStatus = { ...prev };
         if (isTyping) {
@@ -738,7 +744,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     });
   }, [user.id, user.name]);
 
-  const deleteMessages = useCallback((chatId: string, messageIds: string[]) => {
+  const deleteMessages = useCallback(({ chatId, messageIds }: { chatId: string, messageIds: string[] }) => {
       setChats(prev => prev.map(chat => {
           if (chat.id !== chatId) return chat;
           return {
@@ -768,7 +774,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
     }));
   }, []);
 
-  const createGroupChat = useCallback((name: string, participantIds: string[]) => {
+  const createGroupChat = useCallback(({ name, participantIds }: { name: string, participantIds: string[] }) => {
       const newChat: Chat = {
           id: `chat-${Date.now()}`,
           type: 'group',
@@ -824,7 +830,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({ children
       return newMeeting;
   }, [user.id, user.name, chats, findOrCreateContactByEmail]);
   
-  const updateMeeting = useCallback((meetingId: string, updatedDetails: Partial<Meeting>): Meeting | undefined => {
+  const updateMeeting = useCallback(({ meetingId, updatedDetails }: { meetingId: string, updatedDetails: Partial<Meeting> }): Meeting | undefined => {
       let updatedMeeting: Meeting | undefined;
       setChats(prev => prev.map(chat => ({
           ...chat,

@@ -503,7 +503,8 @@ export const PauseIcon: React.FC<IconProps> = ({ className }) => (
 
 export const MicrophoneOffIcon: React.FC<IconProps> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 016 0v8.25a3 3 0 01-3 3Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18" />
     </svg>
 );
 
@@ -584,5 +585,17 @@ export const GmailIcon: React.FC<IconProps> = ({ className }) => (
 export const AppleIcon: React.FC<IconProps> = ({ className }) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M19.1 12.39c0-2.43 1.54-3.53 1.68-3.64a.5.5 0 0 0-.6-.85c-.1.08-1.18.98-2.6 1.03-.43.02-1.03-.23-1.63-.23-1.55 0-2.83.95-3.58.95s-2.13-.98-3.68-.95c-1.6.03-2.93.98-3.68.98s-2.1-.95-3.55-.95c-.58 0-1.15.2-1.58.2-1.45.05-2.55-1-2.65-1.05a.5.5 0 0 0-.6.85c.15.11 1.69 1.21 1.69 3.64 0 2.75-2.18 4.34-3.83 4.34-.73 0-1.5-.4-2.18-.4a.5.5 0 0 0-.48.68c.25.48 1.05 1.58 2.33 2.5.6.43 1.28.83 2.15.83 1.53 0 2.73-.93 3.53-.93s2.08.93 3.63.93 2.8-1 3.58-1 .95.4 1.5.4c.75 0 1.48-.4 2.15-.83 1.28-.93 2.08-2.03 2.33-2.5a.5.5 0 0 0-.48-.68c-.68 0-1.45.4-2.18.4-1.63 0-3.83-1.6-3.83-4.34zM15.48 5.7c.65-.8 1.1-1.93 1-3.1-.85.05-1.95.63-2.6 1.43-.63.78-1.18 1.93-1.05 3.08.9.05 2.03-.63 2.65-1.4z"></path>
+    </svg>
+);
+
+export const ArrowsPointingOutIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9M20.25 20.25h-4.5m4.5 0v-4.5m0-4.5L15 15" />
+    </svg>
+);
+
+export const ArrowsPointingInIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5M15 15l5.25 5.25" />
     </svg>
 );

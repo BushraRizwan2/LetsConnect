@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BackgroundEffect, PreJoinSettings } from '../types';
+import { useAppContext } from '../context/AppContext';
 import { MicrophoneOnIcon, MicrophoneOffIcon, VideoCameraIcon, VideoCameraSlashIcon, SparklesIcon, XIcon } from './icons';
 import { virtualBackgrounds } from '../data/virtualBackgrounds';
 import { VideoWithBackground } from './VideoWithBackground';
@@ -13,6 +14,7 @@ interface PreJoinScreenProps {
 }
 
 export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, meetingTitle, initialAudioOn = true, initialVideoOn = true }) => {
+    const { user } = useAppContext();
     const [isMicOn, setIsMicOn] = useState(initialAudioOn);
     const [isCameraOn, setIsCameraOn] = useState(initialVideoOn);
     const [backgroundEffect, setBackgroundEffect] = useState<BackgroundEffect>('none');
@@ -24,23 +26,30 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, m
     const effectsMenuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        let activeStream: MediaStream | null = null;
-        
+        // Preload the user's avatar to ensure the blurred background appears quickly.
+        const avatarPreloader = new Image();
+        avatarPreloader.src = user.avatar;
+    }, [user.avatar]);
+
+    useEffect(() => {
+        let currentStream: MediaStream | null = null;
         const setupStream = async () => {
             setIsLoading(true);
             try {
-                // Always request both audio and video for a stable stream object
-                const newStream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: { width: 1280, height: 720 },
-                });
-                activeStream = newStream;
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const audioTracks = audioStream.getAudioTracks();
+                audioTracks.forEach(track => (track.enabled = initialAudioOn));
                 
-                // Enable/disable tracks based on initial props, not state, to avoid race conditions
-                activeStream.getAudioTracks().forEach(track => track.enabled = initialAudioOn);
-                activeStream.getVideoTracks().forEach(track => track.enabled = initialVideoOn);
+                let videoTracks: MediaStreamTrack[] = [];
+                if (initialVideoOn) {
+                    const videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                    videoTracks = videoStream.getVideoTracks();
+                }
                 
-                setStream(activeStream);
+                const combinedStream = new MediaStream([...audioTracks, ...videoTracks]);
+                currentStream = combinedStream;
+                setStream(combinedStream);
+
             } catch (error) {
                 console.error('Error accessing media devices.', error);
                 alert('Could not access your camera or microphone. Please check browser permissions.');
@@ -54,9 +63,9 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, m
         setupStream();
 
         return () => {
-            activeStream?.getTracks().forEach(track => track.stop());
+            currentStream?.getTracks().forEach(track => track.stop());
         };
-    }, [initialAudioOn, initialVideoOn]);
+    }, []); // This effect should run only once on mount
 
     const handleToggleMic = () => {
         setIsMicOn(prev => {
@@ -68,14 +77,40 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, m
         });
     };
 
-    const handleToggleCamera = () => {
-        setIsCameraOn(prev => {
-            const newState = !prev;
+    const handleToggleCamera = async () => {
+        if (isCameraOn) {
+            // Turning OFF
+            setIsCameraOn(false);
+            setShowEffectsMenu(false); // Close effects menu when camera is turned off
+            setBackgroundEffect('none');
+            setSelectedWallpaper(undefined);
             stream?.getVideoTracks().forEach(track => {
-                track.enabled = newState;
+                track.stop();
             });
-            return newState;
-        });
+            // Create a new stream with only audio to reflect the change
+            const newStream = new MediaStream(stream?.getAudioTracks() || []);
+            setStream(newStream);
+        } else {
+            // Turning ON
+            setIsLoading(true);
+            try {
+                const videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                const newVideoTracks = videoStream.getVideoTracks();
+
+                const audioTracks = stream?.getAudioTracks() || [];
+                const newStream = new MediaStream([...audioTracks, ...newVideoTracks]);
+                
+                setStream(newStream);
+                setIsCameraOn(true);
+
+            } catch (error) {
+                console.error('Error accessing camera.', error);
+                alert('Could not access camera. Please check browser permissions.');
+                setIsCameraOn(false);
+            } finally {
+                setIsLoading(false);
+            }
+        }
     };
     
 
@@ -159,8 +194,41 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, m
             );
         }
 
+        if (!isCameraOn) {
+            return (
+                <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden p-4 text-center">
+                    <img 
+                        src={user.avatar} 
+                        alt="" 
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover filter blur-2xl scale-110 brightness-50"
+                    />
+                    <div className="relative z-10 flex flex-col items-center justify-center">
+                        <div className="relative w-56 h-56 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-white/5 rounded-full animate-pulse-slow"></div>
+                            <img 
+                                src={user.avatar} 
+                                alt={user.name} 
+                                className="w-48 h-48 rounded-full object-cover shadow-lg z-10 ring-4 ring-white/10" 
+                            />
+                        </div>
+                        
+                        <h2 className="mt-6 text-2xl font-bold text-white drop-shadow-md">
+                            Your camera is off
+                        </h2>
+                        
+                        <p className="mt-2 text-white/80 max-w-sm drop-shadow-sm">
+                            {isMicOn 
+                                ? "Your mic is on, so you'll be heard but not seen." 
+                                : "Your mic is also off, so you won't be seen or heard."}
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
         return (
-            <div className="w-full h-full bg-black">
+            <div className="w-full h-full bg-black relative">
                 <VideoWithBackground
                     stream={stream}
                     isCameraOn={isCameraOn}
@@ -168,6 +236,12 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, m
                     wallpaperUrl={selectedWallpaper}
                     className="w-full h-full object-cover"
                 />
+                {!isMicOn && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded-full flex items-center space-x-2 text-sm font-semibold backdrop-blur-sm animate-fade-in-fast">
+                        <MicrophoneOffIcon className="w-5 h-5" />
+                        <span>Your microphone is off</span>
+                    </div>
+                )}
             </div>
         );
     };
@@ -199,13 +273,13 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({ onClose, onJoin, m
                         inactiveIcon={<MicrophoneOffIcon className="w-8 h-8" />}
                         label={isMicOn ? "Mute microphone" : "Unmute microphone"}
                     />
-                     <ControlButton 
-                        isActive={isCameraOn}
-                        onToggle={handleToggleCamera}
-                        activeIcon={<VideoCameraIcon className="w-8 h-8" />}
-                        inactiveIcon={<VideoCameraSlashIcon className="w-8 h-8" />}
-                        label={isCameraOn ? "Turn off camera" : "Turn on camera"}
-                    />
+                     <button
+                        onClick={handleToggleCamera}
+                        className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-colors ${isCameraOn ? 'bg-slate-600' : 'bg-red-500 text-white'}`}
+                        aria-label={isCameraOn ? "Turn off camera" : "Turn on camera"}
+                    >
+                        {isCameraOn ? <VideoCameraIcon className="w-8 h-8" /> : <VideoCameraSlashIcon className="w-8 h-8" />}
+                    </button>
                     <button
                         onClick={() => setShowEffectsMenu(p => !p)}
                         className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-colors ${showEffectsMenu ? 'bg-highlight' : 'bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}

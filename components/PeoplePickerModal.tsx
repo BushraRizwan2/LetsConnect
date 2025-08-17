@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { User } from '../types';
+import { User, UserStatus } from '../types';
 import { XIcon, MagnifyingGlassIcon, UserPlusIcon } from './icons';
 
 interface PeoplePickerModalProps {
@@ -11,6 +11,17 @@ interface PeoplePickerModalProps {
 }
 
 const isEmailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const getStatusColorClass = (status: UserStatus): string => {
+    switch (status) {
+        case UserStatus.Online: return 'bg-online';
+        case UserStatus.Busy: return 'bg-busy';
+        case UserStatus.Away: return 'bg-yellow-500';
+        case UserStatus.DoNotDisturb: return 'bg-red-600';
+        case UserStatus.Offline: return 'bg-offline';
+        default: return 'bg-transparent';
+    }
+};
 
 export const PeoplePickerModal: React.FC<PeoplePickerModalProps> = ({
     isOpen,
@@ -28,11 +39,14 @@ export const PeoplePickerModal: React.FC<PeoplePickerModalProps> = ({
     );
 
     const filteredContacts = useMemo(() => {
-        if (!searchTerm) return [];
-        return availableContacts.filter(c =>
-            !selectedEmails.includes(c.email) &&
-            (c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.email.toLowerCase().includes(searchTerm.toLowerCase()))
+        const source = availableContacts.filter(c => !selectedEmails.includes(c.email));
+        const lowerCaseSearch = searchTerm.toLowerCase().trim();
+        if (!lowerCaseSearch) {
+            return source;
+        }
+        return source.filter(c =>
+            c.name.toLowerCase().includes(lowerCaseSearch) ||
+            c.email.toLowerCase().includes(lowerCaseSearch)
         );
     }, [searchTerm, availableContacts, selectedEmails]);
 
@@ -105,6 +119,7 @@ export const PeoplePickerModal: React.FC<PeoplePickerModalProps> = ({
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-4 pb-4">
+                    <h4 className="text-sm font-bold text-text-secondary my-2">{searchTerm ? 'Search Results' : 'Suggestions'}</h4>
                     <ul className="space-y-1">
                         {searchTerm.trim() && isEmailValid(searchTerm.trim()) && !filteredContacts.some(c => c.email === searchTerm.trim()) && !selectedEmails.includes(searchTerm.trim()) && (
                              <li
@@ -126,7 +141,10 @@ export const PeoplePickerModal: React.FC<PeoplePickerModalProps> = ({
                                 onClick={() => handleToggleSelection(contact.email)}
                                 className="flex items-center p-2 rounded-md hover:bg-slate-700 cursor-pointer"
                             >
-                                <img src={contact.avatar} alt={contact.name} className="w-10 h-10 rounded-full mr-3" />
+                                <div className="relative mr-3 flex-shrink-0">
+                                    <img src={contact.avatar} alt={contact.name} className="w-10 h-10 rounded-full" />
+                                    <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-secondary ${getStatusColorClass(contact.status)}`} />
+                                </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-semibold truncate">{contact.name}</p>
                                     <p className="text-sm text-text-secondary truncate">{contact.email}</p>

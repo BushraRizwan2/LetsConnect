@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User } from '../types';
@@ -35,7 +36,7 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ onClose }) =
             return;
         }
 
-        createGroupChat(teamName, selectedContacts);
+        createGroupChat({ name: teamName, participantIds: selectedContacts });
         onClose();
     };
 

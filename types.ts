@@ -280,6 +280,7 @@ export interface CallState {
   meeting: Meeting;
   participants: User[];
   initialSettings: PreJoinSettings;
+  sessionId: number;
 }
 
 export enum ActivityType {

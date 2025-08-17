@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserStatus, Chat, Meeting, Message } from '../types';
@@ -100,25 +101,59 @@ const FilesSection: React.FC<{ chat: Chat | undefined; onOpenForwardPicker: (mes
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [mediaToView, setMediaToView] = useState<{ messages: Message[]; startIndex: number } | null>(null);
     
-    const getPhotoUrl = (message: Message): string => {
+    const getPhotoUrl = useCallback((message: Message): string => {
         if (message.type === 'image') return message.content;
         if (message.type === 'file' && message.fileInfo?.type.startsWith('image/')) {
-            return message.fileInfo.url;
+            return message.fileInfo?.url || '';
         }
         return '';
-    };
+    }, []);
 
-    const photos = chat?.messages.filter(m => !(m.deletedFor || []).includes(user.id) && (m.type === 'image' || (m.type === 'file' && m.fileInfo?.type.startsWith('image/')))) || [];
-    const files = chat?.messages.filter(m => !(m.deletedFor || []).includes(user.id) && ((m.type === 'file' && !m.fileInfo?.type.startsWith('image/')) || m.type === 'audio')) || [];
-    const links = (chat?.messages.filter(m => !(m.deletedFor || []).includes(user.id) && m.type === 'text' && !!m.content.match(/(https?:\/\/[^\s]+)/g)) || [])
-        .flatMap((m) => 
-            (m.content.match(/(https?:\/\/[^\s]+)/g) || []).map((url, urlIndex) => ({
-                id: `${m.id}-link-${urlIndex}`,
-                messageId: m.id,
-                url, 
-                timestamp: m.timestamp 
-            }))
-        );
+    const { photos, files, links } = useMemo(() => {
+        const photoMessages: Message[] = [];
+        const fileMessages: Message[] = [];
+        const linkMessages: { id: string; messageId: string; url: string; timestamp: string }[] = [];
+
+        if (!chat) return { photos: [], files: [], links: [] };
+
+        for (const m of chat.messages) {
+            if ((m.deletedFor || []).includes(user.id)) continue;
+            
+            switch (m.type) {
+                case 'image':
+                    photoMessages.push(m);
+                    break;
+                case 'file':
+                    if (m.fileInfo) {
+                        if (m.fileInfo.type.startsWith('image/')) {
+                            photoMessages.push(m);
+                        } else {
+                            fileMessages.push(m);
+                        }
+                    }
+                    break;
+                case 'audio':
+                    fileMessages.push(m);
+                    break;
+                case 'text':
+                    if (m.content) {
+                        const urls = m.content.match(/(https?:\/\/[^\s]+)/g) || [];
+                        urls.forEach((url, urlIndex) => {
+                            linkMessages.push({
+                                id: `${m.id}-link-${urlIndex}`,
+                                messageId: m.id,
+                                url,
+                                timestamp: m.timestamp
+                            });
+                        });
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        return { photos: photoMessages.reverse(), files: fileMessages.reverse(), links: linkMessages.reverse() };
+    }, [chat, user.id]);
     
     const mediaMap = { photos, files, links };
 
@@ -151,7 +186,7 @@ const FilesSection: React.FC<{ chat: Chat | undefined; onOpenForwardPicker: (mes
             return itemId;
         }).filter((id): id is string => !!id)));
 
-        deleteMessages(chat.id, messageIdsToDelete);
+        deleteMessages({ chatId: chat.id, messageIds: messageIdsToDelete });
         setSelectedItems([]);
         setShowConfirmDelete(false);
     };
@@ -219,8 +254,8 @@ const FilesSection: React.FC<{ chat: Chat | undefined; onOpenForwardPicker: (mes
                                 <DocumentTextIcon className="w-8 h-8 text-text-secondary mr-4 flex-shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                                <p className="font-semibold truncate">{item.type === 'audio' ? 'Voice Note' : item.fileInfo.name}</p>
-                                <p className="text-sm text-text-secondary">{item.type === 'audio' ? `${item.audioInfo?.duration || 0}s` : item.fileInfo.size}</p>
+                                <p className="font-semibold truncate">{item.type === 'audio' ? 'Voice Note' : item.fileInfo?.name}</p>
+                                <p className="text-sm text-text-secondary">{item.type === 'audio' ? `${item.audioInfo?.duration || 0}s` : item.fileInfo?.size}</p>
                             </div>
                             {isSelectionMode && (
                                 <div className={`w-6 h-6 rounded-full border-2 ${isSelected ? 'bg-accent border-accent' : 'border-slate-500'} flex items-center justify-center`}>
@@ -466,7 +501,7 @@ const ContactDetailsModalWithoutMemo: React.FC<ContactDetailsModalProps> = ({ us
     const mediaCount = useMemo(() => {
         if (!privateChat) return 0;
         const photosCount = (privateChat.messages || []).filter(m => !(m.deletedFor || []).includes(currentUser.id) && (m.type === 'image' || (m.type === 'file' && m.fileInfo?.type.startsWith('image/')))).length;
-        const filesCount = (privateChat.messages || []).filter(m => !(m.deletedFor || []).includes(currentUser.id) && ((m.type === 'file' && !m.fileInfo?.type.startsWith('image/')) || m.type === 'audio')).length;
+        const filesCount = (privateChat.messages || []).filter(m => !(m.deletedFor || []).includes(currentUser.id) && ((m.type === 'file' && m.fileInfo && !m.fileInfo.type.startsWith('image/')) || m.type === 'audio')).length;
         const linksCount = (privateChat.messages || []).filter(m => !(m.deletedFor || []).includes(currentUser.id) && m.type === 'text')
             .reduce((acc, m) => acc + (m.content.match(/(https?:\/\/[^\s]+)/g) || []).length, 0);
         return photosCount + filesCount + linksCount;
@@ -475,7 +510,7 @@ const ContactDetailsModalWithoutMemo: React.FC<ContactDetailsModalProps> = ({ us
 
     const handleNameSave = useCallback(() => {
         if (editedName.trim() && editedName.trim() !== contact.name) {
-            updateContactName(contact.id, editedName.trim());
+            updateContactName({ contactId: contact.id, name: editedName.trim() });
         }
         setIsEditingName(false);
     }, [editedName, contact.id, contact.name, updateContactName]);

@@ -162,9 +162,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = React.memo<ChatHeaderProps>(({ onS
     const handleTitleSave = () => {
         if (editedTitle.trim() && activeChatId) {
             if(chat?.type === 'private' && partner) {
-                updateContactName(partner.id, editedTitle.trim());
+                updateContactName({ contactId: partner.id, name: editedTitle.trim() });
             } else if (chat?.type === 'group') {
-                updateChatName(activeChatId, editedTitle.trim());
+                updateChatName({ chatId: activeChatId, name: editedTitle.trim() });
             }
         }
         setIsEditing(false);
@@ -398,7 +398,7 @@ const ChatWindow: React.FC<{
   onOpenGroupDetails: (chat: Chat) => void;
   onBack: () => void;
 }> = (props) => {
-    const { activeChatId, chats, user, getContactById, togglePinMessage, copyToClipboard, deleteMessages, pendingPrivateReply, clearPendingPrivateReply, getMessageById, typingStatus } = useAppContext();
+    const { activeChatId, chats, user, getContactById, togglePinMessage, copyToClipboard, deleteMessages, deleteMessage, pendingPrivateReply, clearPendingPrivateReply, getMessageById, typingStatus } = useAppContext();
     const chat = chats.find(c => c.id === activeChatId);
     
     // States
@@ -452,16 +452,21 @@ const ChatWindow: React.FC<{
 
     // Effect for initial load/chat switch, always scroll to bottom
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        // A timeout ensures that the DOM has been updated and rendered before we try to scroll.
+        const timer = setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        }, 0);
         shouldScrollRef.current = true; // Reset scroll lock for new chat
 
         if (pendingPrivateReply && activeChatId === pendingPrivateReply.chatId) {
-            const sourceMessage = getMessageById(pendingPrivateReply.chatId, pendingPrivateReply.messageId);
+            const sourceMessage = getMessageById({ chatId: pendingPrivateReply.chatId, messageId: pendingPrivateReply.messageId });
             if(sourceMessage) {
                 setReplyTo(sourceMessage);
             }
             clearPendingPrivateReply();
         }
+        
+        return () => clearTimeout(timer);
     }, [activeChatId, pendingPrivateReply, clearPendingPrivateReply, getMessageById]);
 
      useEffect(() => {
@@ -510,7 +515,7 @@ const ChatWindow: React.FC<{
 
     const handleDeleteSelection = () => {
         if (window.confirm(`Are you sure you want to delete ${selectedMessageIds.length} messages for yourself?`)) {
-            if(activeChatId) deleteMessages(activeChatId, selectedMessageIds);
+            if(activeChatId) deleteMessages({ chatId: activeChatId, messageIds: selectedMessageIds });
             handleCancelSelection();
         }
     };
@@ -518,6 +523,26 @@ const ChatWindow: React.FC<{
     const handleForwardSelection = () => {
         if (activeChatId) props.onOpenForwardPicker(activeChatId, selectedMessageIds);
         handleCancelSelection();
+    };
+
+    const handleDeleteMessageFromViewer = (messageId: string, forEveryone: boolean) => {
+        if (activeChatId) {
+            deleteMessage({ chatId: activeChatId, messageId, forEveryone });
+            setMediaToView(prev => {
+                if (!prev) return null;
+                const newMessages = prev.messages.filter(m => m.id !== messageId);
+                if (newMessages.length === 0) return null;
+                const newIndex = Math.min(prev.startIndex, newMessages.length - 1);
+                return { messages: newMessages, startIndex: newIndex };
+            });
+        }
+    };
+
+    const handleForwardMessageFromViewer = (messageId: string) => {
+        if (activeChatId) {
+            props.onOpenForwardPicker(activeChatId, [messageId]);
+            setMediaToView(null);
+        }
     };
     
     const renderMessages = useMemo(() => {
@@ -649,7 +674,7 @@ const ChatWindow: React.FC<{
             
             <PinnedMessageBar 
                 chat={chat} 
-                onUnpin={(id) => togglePinMessage(chat.id, id)}
+                onUnpin={(id) => togglePinMessage({ chatId: chat.id, messageId: id })}
                 onJumpTo={(id) => messageRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
             />
 
@@ -674,7 +699,13 @@ const ChatWindow: React.FC<{
                     onCancelReply={() => setReplyTo(null)}
                 />
             </footer>
-             {mediaToView && <MediaViewer messages={mediaToView.messages} initialIndex={mediaToView.startIndex} onClose={() => setMediaToView(null)} />}
+             {mediaToView && <MediaViewer 
+                messages={mediaToView.messages} 
+                initialIndex={mediaToView.startIndex} 
+                onClose={() => setMediaToView(null)} 
+                onDelete={handleDeleteMessageFromViewer}
+                onForward={handleForwardMessageFromViewer}
+             />}
              {reactionModalMessage && <ReactionDetailsModal message={reactionModalMessage} onClose={() => setReactionModalMessage(null)} />}
              {viewingTranscript && <TranscriptViewerModal transcriptInfo={viewingTranscript} onClose={() => setViewingTranscript(null)} />}
         </div>

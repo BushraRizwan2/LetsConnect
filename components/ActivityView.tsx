@@ -100,7 +100,7 @@ const ActivityItem: React.FC<{ activity: Activity }> = React.memo(({ activity })
     const handleClick = () => {
         setActiveChatId(activity.chatId);
         setActiveFeature('chat');
-        markActivityAsRead(activity.id, true);
+        markActivityAsRead({ activityId: activity.id, read: true });
     };
 
     return (
@@ -138,7 +138,7 @@ const ActivityItem: React.FC<{ activity: Activity }> = React.memo(({ activity })
                 </button>
                 {isMenuOpen && (
                     <div className="absolute top-full right-0 mt-1 bg-primary rounded-lg shadow-2xl border border-slate-600 w-48 py-1 z-20">
-                        <button onClick={(e) => { e.stopPropagation(); markActivityAsRead(activity.id, !activity.isRead); setIsMenuOpen(false); }} className="flex items-center w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-secondary">
+                        <button onClick={(e) => { e.stopPropagation(); markActivityAsRead({ activityId: activity.id, read: !activity.isRead }); setIsMenuOpen(false); }} className="flex items-center w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-secondary">
                             <EnvelopeOpenIcon className="w-4 h-4 mr-3" />
                             Mark as {activity.isRead ? 'Unread' : 'Read'}
                         </button>

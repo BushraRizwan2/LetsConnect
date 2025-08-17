@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+
+
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserStatus, Chat, Message, Meeting, CallInfo, RecurrenceFrequency } from '../types';
 import { 
@@ -435,7 +437,7 @@ const ChatListItem: React.FC<{ chat: Chat; isActive: boolean; onClick: () => voi
         <li
             onClick={() => {
                 onClick();
-                markChatAsRead(chat.id, true);
+                markChatAsRead({ chatId: chat.id, read: true });
             }}
             className={`flex items-center p-3 space-x-3 cursor-pointer rounded-lg mx-2 group relative transition-colors ${isActive ? 'bg-slate-600' : 'hover:bg-secondary'}`}
         >
@@ -482,7 +484,7 @@ const ChatListItem: React.FC<{ chat: Chat; isActive: boolean; onClick: () => voi
                 {isMenuOpen && (
                     <div className="absolute top-full right-0 mt-1 bg-primary rounded-lg shadow-2xl border border-slate-600 w-56 py-1 z-50 animate-fade-in-fast">
                         <MenuItem icon={StarIcon} text={chat.isFavorite ? "Unfavorite" : "Favorite"} onClick={() => { toggleFavorite(chat.id); setIsMenuOpen(false); }} />
-                        <MenuItem icon={EnvelopeOpenIcon} text={isUnread ? "Mark as Read" : "Mark as Unread"} onClick={() => { markChatAsRead(chat.id, !!isUnread); setIsMenuOpen(false); }} />
+                        <MenuItem icon={EnvelopeOpenIcon} text={isUnread ? "Mark as Read" : "Mark as Unread"} onClick={() => { markChatAsRead({ chatId: chat.id, read: !!isUnread }); setIsMenuOpen(false); }} />
                         <MenuItem icon={chat.isMuted ? BellOffIcon : BellIcon} text={chat.isMuted ? "Unmute" : "Mute"} onClick={() => { toggleMuteChat(chat.id); setIsMenuOpen(false); }} />
                         <MenuItem icon={EyeOffIcon} text="Hide Conversation" onClick={() => { hideChat(chat.id); setIsMenuOpen(false); }} />
                         <MenuItem icon={FolderIcon} text={chat.isArchived ? "Unarchive" : "Archive"} onClick={() => { archiveChat(chat.id); setIsMenuOpen(false); }} />
@@ -566,23 +568,24 @@ const ContactListItem: React.FC<{
     );
 });
 
-const CallLogItem: React.FC<{ message: Message; onStartCall: (partnerId: string, callType: 'audio' | 'video') => void; }> = React.memo(({ message, onStartCall }) => {
-    const { getContactById, user, deleteMessage, activeChatId } = useAppContext();
-    const partnerId = message.senderId === user.id
-        ? message.callInfo!.type === 'outgoing' ? activeChatId : 'system' // This logic seems flawed. Partner should be determined from chat.
-        : message.senderId;
-
-    const chat = useAppContext().chats.find(c => c.messages.some(m => m.id === message.id));
-    if (!chat) return null;
-    
-    const truePartnerId = chat.participants.find(p => p !== user.id);
-    if (!truePartnerId) return null;
-
-    const partner = getContactById(truePartnerId);
-    if (!partner) return null;
-
+const CallLogItem: React.FC<{ message: Message; chat: Chat; onStartCall: (partnerId: string, callType: 'audio' | 'video') => void; }> = React.memo(({ message, chat, onStartCall }) => {
+    const { getContactById, user, deleteMessage } = useAppContext();
     const { callInfo, timestamp } = message;
-    if (!callInfo) return null;
+
+    if (!callInfo) {
+        return null;
+    }
+
+    const isPrivateChat = chat.type === 'private';
+    const partnerId = isPrivateChat ? chat.participants.find(pId => pId !== user.id) : null;
+    const partner = partnerId ? getContactById(partnerId) : null;
+
+    if (isPrivateChat && !partner) {
+        return null;
+    }
+
+    const name = isPrivateChat ? partner!.name : chat.name || 'Group Call';
+    const avatar = isPrivateChat ? partner!.avatar : chat.avatar;
 
     let icon: React.ReactNode;
     let description = '';
@@ -605,10 +608,10 @@ const CallLogItem: React.FC<{ message: Message; onStartCall: (partnerId: string,
     return (
         <li className="flex items-center p-3 mx-2 space-x-3 cursor-pointer rounded-lg hover:bg-secondary group">
             <div className="relative flex-shrink-0">
-                <img src={getAvatarUrl(partner.name, partner.avatar)} alt={partner.name} className="h-12 w-12 rounded-full" />
+                <img src={getAvatarUrl(name, avatar)} alt={name} className="h-12 w-12 rounded-full" />
             </div>
              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-text-primary">{partner.name}</p>
+                <p className="font-semibold text-text-primary">{name}</p>
                 <div className="flex items-center space-x-1 text-sm text-text-secondary">
                     {icon}
                     <span>{description}</span>
@@ -616,10 +619,12 @@ const CallLogItem: React.FC<{ message: Message; onStartCall: (partnerId: string,
             </div>
             <div className="text-sm text-text-secondary">{formatTimestamp(timestamp, user.settings?.timezone)}</div>
             <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button onClick={() => onStartCall(partner.id, 'audio')} className="p-2 text-text-secondary hover:text-white hover:bg-slate-700 rounded-full">
-                    <PhoneIcon className="w-5 h-5" />
-                </button>
-                <button onClick={() => deleteMessage(chat.id, message.id, false)} className="p-2 text-text-secondary hover:text-red-500 hover:bg-slate-700 rounded-full">
+                 {isPrivateChat && partner && (
+                    <button onClick={() => onStartCall(partner.id, 'audio')} className="p-2 text-text-secondary hover:text-white hover:bg-slate-700 rounded-full">
+                        <PhoneIcon className="w-5 h-5" />
+                    </button>
+                 )}
+                <button onClick={() => deleteMessage({ chatId: chat.id, messageId: message.id, forEveryone: false })} className="p-2 text-text-secondary hover:text-red-500 hover:bg-slate-700 rounded-full">
                     <TrashIcon className="w-5 h-5" />
                 </button>
             </div>
@@ -661,7 +666,6 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
         onOpenProfilePictureModal,
         onOpenAddContact,
         onOpenNewChat,
-        onStartCall,
         onOpenScheduleMeeting,
         onJoinMeeting,
         onMeetingClick,
@@ -671,34 +675,41 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
     const { chats, contacts, user, activeChatId, setActiveChatId, getOrCreatePrivateChat, getContactById } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
 
-    const handleStartCall = (userId: string, callType: 'audio' | 'video') => {
+    const handleStartCall = useCallback((userId: string, callType: 'audio' | 'video') => {
         const chatId = getOrCreatePrivateChat(userId);
         props.onStartCall(userId, chatId, callType);
-    };
+    }, [getOrCreatePrivateChat, props.onStartCall]);
 
-    const handleContactClick = (userId: string) => {
+    const handleContactClick = useCallback((userId: string) => {
         const chatId = getOrCreatePrivateChat(userId);
         setActiveChatId(chatId);
-    };
+    }, [getOrCreatePrivateChat, setActiveChatId]);
+
+    const sortedChats = useMemo(() => {
+        return [...chats]
+            .filter(c => !c.isHidden)
+            .sort((a, b) => {
+                if (a.isFavorite && !b.isFavorite) return -1;
+                if (!a.isFavorite && b.isFavorite) return 1;
+                const lastMsgA = a.messages[a.messages.length - 1];
+                const lastMsgB = b.messages[b.messages.length - 1];
+                if (lastMsgA && lastMsgB) {
+                    return new Date(lastMsgB.timestamp).getTime() - new Date(lastMsgA.timestamp).getTime();
+                }
+                return 0;
+            });
+    }, [chats]);
+
+    const callLogs = useMemo(() => chats.flatMap(chat => 
+        chat.messages
+            .filter(m => m.type === 'call' && !m.isDeleted && !(m.deletedFor || []).includes(user.id))
+            .map(message => ({ message, chat }))
+        )
+        .sort((a, b) => new Date(b.message.timestamp).getTime() - new Date(a.message.timestamp).getTime()), [chats, user.id]);
 
     const renderContent = () => {
         switch (props.activeContent) {
             case 'chats': {
-                 const sortedChats = useMemo(() => {
-                    return [...chats]
-                        .filter(c => !c.isHidden)
-                        .sort((a, b) => {
-                            if (a.isFavorite && !b.isFavorite) return -1;
-                            if (!a.isFavorite && b.isFavorite) return 1;
-                            const lastMsgA = a.messages[a.messages.length - 1];
-                            const lastMsgB = b.messages[b.messages.length - 1];
-                            if (lastMsgA && lastMsgB) {
-                                return new Date(lastMsgB.timestamp).getTime() - new Date(lastMsgA.timestamp).getTime();
-                            }
-                            return 0;
-                        });
-                }, [chats]);
-
                 const filteredChats = sortedChats.filter(c => {
                     let name = '';
                     if (c.type === 'private') {
@@ -753,8 +764,6 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
                 );
             }
             case 'calls': {
-                 const callLogs = useMemo(() => chats.flatMap(c => c.messages.filter(m => m.type === 'call' && !m.isDeleted && !(m.deletedFor || []).includes(user.id)))
-                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()), [chats, user.id]);
                 return (
                     <div className="flex-1 flex flex-col min-h-0">
                         <ListHeader title="Calls" />
@@ -763,7 +772,7 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
                             <button onClick={onJoinWithId} className="px-4 py-2 bg-secondary border border-slate-600 font-semibold rounded-md text-sm hover:bg-slate-700">Join with ID</button>
                         </div>
                          <ul className="flex-1 overflow-y-auto space-y-1 pb-2">
-                            {callLogs.map(log => <CallLogItem key={log.id} message={log} onStartCall={handleStartCall} />)}
+                            {callLogs.map(({message, chat}) => <CallLogItem key={message.id} message={message} chat={chat} onStartCall={handleStartCall} />)}
                         </ul>
                     </div>
                 );
