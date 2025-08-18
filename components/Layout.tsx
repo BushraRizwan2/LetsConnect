@@ -719,8 +719,32 @@ const Layout: React.FC = () => {
       {scheduleMeetingProps && <ScheduleMeetingModal {...scheduleMeetingProps} onClose={handleScheduleMeetingClose} onJoin={handleJoinMeeting} onOpenChat={handleOpenChatFromModal} />}
       {showJoinMeetingModal && <JoinMeetingModal onClose={() => setShowJoinMeetingModal(false)} onJoin={(id) => { const result = getMeetingById(id); if (result) { handleJoinMeeting(result.meeting); setShowJoinMeetingModal(false); } else { alert('Meeting not found'); } }} />}
       {peoplePickerProps && <PeoplePickerModal isOpen={!!peoplePickerProps} onClose={() => setPeoplePickerProps(null)} onAdd={peoplePickerProps.onAdd} excludedEmails={peoplePickerProps.currentParticipants.map(p => p.email)} />}
-      {contactDetailsUser && <ContactDetailsModal user={contactDetailsUser} onClose={() => setContactDetailsUser(null)} onStartCall={(userId, chatId, callType) => handleStartCall(callType, chatId)} onInitiateShareContact={setShareContactPickerUser} onAddParticipant={(chatId, participants) => handleOpenAddPeoplePicker(chatId, participants)} onOpenMeetingDetails={handleOpenScheduleMeeting} onJoinMeeting={handleJoinMeeting} onOpenChat={handleOpenChatFromModal} onOpenForwardPicker={(ids) => setForwardPickerProps({ sourceChatId: getOrCreatePrivateChat(contactDetailsUser.id), messageIds: ids })} />}
-      {groupDetailsChat && <GroupDetailsModal chat={groupDetailsChat} onClose={() => setGroupDetailsChat(null)} onStartCall={(callType) => handleStartCall(callType, groupDetailsChat.id)} onOpenAddPeoplePicker={() => handleOpenAddPeoplePicker(groupDetailsChat.id, groupDetailsChat.participants.map(getContactById).filter((u): u is User => !!u))} onOpenForwardPicker={(ids) => setForwardPickerProps({ sourceChatId: groupDetailsChat.id, messageIds: ids })} onOpenMeetingDetails={handleOpenScheduleMeeting} onOpenChat={handleOpenChatFromModal} />}
+      {contactDetailsUser && <ContactDetailsModal 
+        user={contactDetailsUser} 
+        onClose={() => setContactDetailsUser(null)} 
+        onStartCall={(userId, chatId, callType) => {
+            handleStartCall(callType, chatId);
+            setContactDetailsUser(null);
+        }} 
+        onInitiateShareContact={setShareContactPickerUser} 
+        onAddParticipant={(chatId, participants) => handleOpenAddPeoplePicker(chatId, participants)} 
+        onOpenMeetingDetails={handleOpenScheduleMeeting} 
+        onJoinMeeting={handleJoinMeeting} 
+        onOpenChat={handleOpenChatFromModal} 
+        onOpenForwardPicker={(ids) => setForwardPickerProps({ sourceChatId: getOrCreatePrivateChat(contactDetailsUser.id), messageIds: ids })} 
+      />}
+      {groupDetailsChat && <GroupDetailsModal 
+        chat={groupDetailsChat} 
+        onClose={() => setGroupDetailsChat(null)} 
+        onStartCall={(callType) => {
+            handleStartCall(callType, groupDetailsChat.id);
+            setGroupDetailsChat(null);
+        }} 
+        onOpenAddPeoplePicker={() => handleOpenAddPeoplePicker(groupDetailsChat.id, groupDetailsChat.participants.map(getContactById).filter((u): u is User => !!u))} 
+        onOpenForwardPicker={(ids) => setForwardPickerProps({ sourceChatId: groupDetailsChat.id, messageIds: ids })} 
+        onOpenMeetingDetails={handleOpenScheduleMeeting} 
+        onOpenChat={handleOpenChatFromModal} 
+      />}
       {meetingCreated && <MeetingCreatedModal meeting={meetingCreated} onClose={() => setMeetingCreated(null)} />}
       {meetingsToNotify.map(id => {
           if (dismissedNotifications.includes(id) || preJoinLobbyState || activeCallState) return null;

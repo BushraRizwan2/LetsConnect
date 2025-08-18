@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { CallState, User, Message, MeetingParticipant, UserStatus, BackgroundEffect, TranscriptInfo } from '../types';
 import { MeetingParticipantTile } from './MeetingParticipantTile';
@@ -9,7 +10,7 @@ import MessageInputBar from './MessageInputBar';
 import { TranscriptViewerModal } from './TranscriptViewerModal';
 import { MediaViewer } from './MediaViewer';
 import { 
-    ChatBubbleLeftIcon, HandRaisedIcon, FaceSmileIcon,
+    ChatBubbleLeftRightIcon, HandRaisedIcon, FaceSmileIcon,
     ClipboardDocumentListIcon, VideoCameraIcon, 
     VideoCameraSlashIcon, MicrophoneOnIcon, MicrophoneOffIcon, ArrowUpTrayIcon, SendIcon, 
     XIcon, UserPlusIcon, UsersIcon, MagnifyingGlassIcon,
@@ -227,7 +228,7 @@ const MeetingChatPanel: React.FC<{
     }, [chat, user.id]);
 
     return (
-        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0">
+        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0 animate-slide-in-right">
             <header className="flex-shrink-0 p-4 flex items-center justify-between border-b border-slate-700">
                 <h3 className="font-bold">Meeting chat</h3>
                 <button onClick={onClose} className="p-1 text-text-secondary hover:text-white"><XIcon className="w-5 h-5" /></button>
@@ -335,7 +336,7 @@ const MeetingPeoplePanel: React.FC<{
     );
 
     return (
-        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0">
+        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0 animate-slide-in-right">
             <header className="flex-shrink-0 p-4 flex items-center justify-between border-b border-slate-700">
                 <h3 className="font-bold">People ({inMeeting.length + invited.length})</h3>
                 <button onClick={onClose} className="p-1 text-text-secondary hover:text-white"><XIcon className="w-5 h-5" /></button>
@@ -406,11 +407,10 @@ interface MeetingControlBarProps {
     onToggleMic: () => void; isMicOn: boolean;
     onToggleCamera: () => void; isCameraOn: boolean;
     onToggleScreenShare: () => void; isScreenSharing: boolean;
-    onTogglePanel: (panel: 'chat' | 'people') => void; 
-    activePanel: 'chat' | 'people' | null;
+    onTogglePanel: (panel: 'chat' | 'people' | 'effects') => void; 
+    activePanel: 'chat' | 'people' | 'effects' | null;
     onToggleRaiseHand: () => void; isHandRaised: boolean;
     onToggleRecording: () => void; isRecording: boolean;
-    onToggleEffects: () => void; isEffectsPanelActive: boolean;
     onToggleCaptions: () => void; areCaptionsEnabled: boolean;
     onToggleTranslation: () => void; isTranslationEnabled: boolean;
     onShowEmojis: () => void;
@@ -464,7 +464,7 @@ const MeetingControlBar: React.FC<MeetingControlBarProps> = React.memo((props) =
 
             <div className="flex items-center space-x-2 sm:space-x-4">
                 <div className="hidden sm:flex items-center space-x-2 sm:space-x-4">
-                    <ControlButton icon={ChatBubbleLeftIcon} label="Chat" onClick={() => props.onTogglePanel('chat')} isActive={props.activePanel === 'chat'} />
+                    <ControlButton icon={ChatBubbleLeftRightIcon} label="Chat" onClick={() => props.onTogglePanel('chat')} isActive={props.activePanel === 'chat'} />
                     <ControlButton icon={UsersIcon} label="People" onClick={() => props.onTogglePanel('people')} isActive={props.activePanel === 'people'} notificationCount={props.participantCount} />
                     <ControlButton icon={HandRaisedIcon} label="Raise" onClick={props.onToggleRaiseHand} isActive={props.isHandRaised} />
                     <div className="w-px h-10 bg-slate-600" />
@@ -476,7 +476,7 @@ const MeetingControlBar: React.FC<MeetingControlBarProps> = React.memo((props) =
                         isActive={props.isRecording}
                         isDestructive={props.isRecording}
                     />
-                    <ControlButton icon={SparklesIcon} label="Effects" onClick={props.onToggleEffects} isActive={props.isEffectsPanelActive} hasIndicator={false} disabled={!props.isCameraOn} />
+                    <ControlButton icon={SparklesIcon} label="Effects" onClick={() => props.onTogglePanel('effects')} isActive={props.activePanel === 'effects'} hasIndicator={false} disabled={!props.isCameraOn} />
                     <div className="w-px h-10 bg-slate-600" />
                     <ControlButton icon={ClipboardDocumentListIcon} label="Captions" onClick={props.onToggleCaptions} isActive={props.areCaptionsEnabled} />
                     <ControlButton icon={GlobeAltIcon} label="Translate" onClick={props.onToggleTranslation} isActive={props.isTranslationEnabled} />
@@ -486,13 +486,13 @@ const MeetingControlBar: React.FC<MeetingControlBarProps> = React.memo((props) =
                   <ControlButton icon={DotsHorizontalIcon} label="More" onClick={() => setIsMoreMenuOpen(p => !p)} isActive={isMoreMenuOpen} hasIndicator={false} />
                   {isMoreMenuOpen && (
                     <div className="absolute bottom-full mb-2 right-0 w-60 bg-primary border border-slate-600 rounded-lg shadow-xl z-50 p-1">
-                      <MoreMenuItem icon={ChatBubbleLeftIcon} label="Chat" onClick={() => {props.onTogglePanel('chat'); setIsMoreMenuOpen(false);}} isActive={props.activePanel === 'chat'} />
+                      <MoreMenuItem icon={ChatBubbleLeftRightIcon} label="Chat" onClick={() => {props.onTogglePanel('chat'); setIsMoreMenuOpen(false);}} isActive={props.activePanel === 'chat'} />
                       <MoreMenuItem icon={UsersIcon} label="People" onClick={() => {props.onTogglePanel('people'); setIsMoreMenuOpen(false);}} isActive={props.activePanel === 'people'} />
                       <MoreMenuItem icon={HandRaisedIcon} label="Raise Hand" onClick={() => {props.onToggleRaiseHand(); setIsMoreMenuOpen(false);}} isActive={props.isHandRaised} />
                       <MoreMenuItem icon={ArrowUpTrayIcon} label="Share Screen" onClick={() => {props.onToggleScreenShare(); setIsMoreMenuOpen(false);}} isActive={props.isScreenSharing} />
                       <div className="h-px bg-slate-700 my-1"/>
                       <MoreMenuItem icon={RecordCircleIcon} label="Record" onClick={() => {props.onToggleRecording(); setIsMoreMenuOpen(false);}} isActive={props.isRecording} />
-                      <MoreMenuItem icon={SparklesIcon} label="Effects" onClick={() => {props.onToggleEffects(); setIsMoreMenuOpen(false);}} disabled={!props.isCameraOn} />
+                      <MoreMenuItem icon={SparklesIcon} label="Effects" onClick={() => {props.onTogglePanel('effects'); setIsMoreMenuOpen(false);}} disabled={!props.isCameraOn} />
                       <MoreMenuItem icon={ClipboardDocumentListIcon} label="Captions" onClick={() => {props.onToggleCaptions(); setIsMoreMenuOpen(false);}} isActive={props.areCaptionsEnabled} />
                       <MoreMenuItem icon={GlobeAltIcon} label="Translate" onClick={() => {props.onToggleTranslation(); setIsMoreMenuOpen(false);}} isActive={props.isTranslationEnabled} />
                     </div>
@@ -520,7 +520,7 @@ const EffectsPanel: React.FC<{
     onClose: () => void;
 }> = React.memo(({ currentEffect, currentWallpaper, onChange, onClose }) => {
     return (
-        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0">
+        <aside className="w-full sm:w-80 md:w-96 bg-primary h-full border-l border-slate-700 flex flex-col flex-shrink-0 animate-slide-in-right">
             <header className="flex-shrink-0 p-4 flex items-center justify-between border-b border-slate-700">
                 <h3 className="font-bold">Background Effects</h3>
                 <button onClick={onClose} className="p-1 text-text-secondary hover:text-white"><XIcon className="w-5 h-5" /></button>
@@ -740,25 +740,13 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
         }
     }, [isScreenSharing]);
 
-
-    const handleTogglePanel = useCallback((panel: 'chat' | 'people') => {
-        setActiveSidePanel(prev => {
-            if (prev === 'effects') {
-                return panel;
-            }
-            if (prev === panel) {
-                return null;
-            }
-            return panel;
-        });
-    }, []);
+    const handleTogglePanel = useCallback((panel: 'chat' | 'people' | 'effects') => {
+        if (panel === 'effects' && !isCameraOn) return;
+        setActiveSidePanel(prev => (prev === panel ? null : panel));
+    }, [isCameraOn]);
 
     const handleToggleRaiseHand = useCallback(() => setIsHandRaised(p => !p), []);
     
-    const handleToggleEffects = useCallback(() => {
-        setActiveSidePanel(prev => (prev === 'effects' ? null : 'effects'));
-    }, []);
-
     const onToggleRecording = useCallback(() => {
         if (isRecording) {
             mediaRecorderRef.current?.stop();
@@ -966,10 +954,9 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                 isMicOn={isMicOn} onToggleMic={handleToggleMic}
                 isCameraOn={isCameraOn} onToggleCamera={handleToggleCamera}
                 isScreenSharing={isScreenSharing} onToggleScreenShare={handleToggleScreenShare}
-                activePanel={activeSidePanel === 'chat' || activeSidePanel === 'people' ? activeSidePanel : null} onTogglePanel={handleTogglePanel}
+                activePanel={activeSidePanel} onTogglePanel={handleTogglePanel}
                 isHandRaised={isHandRaised} onToggleRaiseHand={handleToggleRaiseHand}
                 isRecording={isRecording} onToggleRecording={onToggleRecording}
-                onToggleEffects={handleToggleEffects} isEffectsPanelActive={activeSidePanel === 'effects'}
                 areCaptionsEnabled={areCaptionsEnabled} onToggleCaptions={onToggleCaptions}
                 isTranslationEnabled={isTranslationEnabled} onToggleTranslation={onToggleTranslation}
                 onShowEmojis={() => {}}
@@ -987,8 +974,8 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                     onForward={handleForwardMessageFromViewer}
                 />
             )}
-            <main className="flex-1 flex min-h-0 relative overflow-hidden">
-                 <div className="flex-1 flex flex-col p-2 md:p-4 overflow-y-auto min-w-0">
+            <main className="flex-1 flex min-h-0 overflow-hidden">
+                <div className="flex-1 relative p-4 md:p-6 overflow-y-auto">
                     {isScreenSharing ? (
                         <div className="w-full h-full bg-black flex items-center justify-center">
                             <video ref={screenVideoRef} autoPlay className="w-full h-full object-contain" />
@@ -1009,18 +996,19 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                              ))}
                         </div>
                     )}
+                     {areCaptionsEnabled && liveCaption && (
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-4xl p-4 bg-black/60 rounded-lg text-center text-lg z-20 backdrop-blur-sm">
+                            <p><span className="text-blue-400 font-bold">{user.name}</span>: {liveCaption.text}</p>
+                            {isTranslationEnabled && (
+                                <p className="text-base text-gray-300 mt-1">
+                                    {isTranslating && !liveCaption.translatedText ? '...' : (liveCaption.translatedText ? <MarkdownText text={liveCaption.translatedText} /> : '')}
+                                </p>
+                            )}
+                        </div>
+                     )}
                 </div>
-                 {areCaptionsEnabled && liveCaption && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-4xl p-4 bg-black/60 rounded-lg text-center text-lg z-20 backdrop-blur-sm">
-                        <p><span className="text-blue-400 font-bold">{user.name}</span>: {liveCaption.text}</p>
-                        {isTranslationEnabled && (
-                            <p className="text-base text-gray-300 mt-1">
-                                {isTranslating && !liveCaption.translatedText ? '...' : (liveCaption.translatedText ? <MarkdownText text={liveCaption.translatedText} /> : '')}
-                            </p>
-                        )}
-                    </div>
-                 )}
-                 <div className={`absolute top-0 right-0 h-full z-30 transition-transform duration-300 ease-in-out ${activeSidePanel === 'chat' ? 'translate-x-0' : 'translate-x-full'}`}>
+                
+                {activeSidePanel === 'chat' && (
                     <MeetingChatPanel 
                         chatId={meeting.chatId} 
                         onClose={() => setActiveSidePanel(null)} 
@@ -1029,8 +1017,8 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                         onViewTranscript={setViewingTranscript}
                         onImageClick={handleImageClick}
                     />
-                 </div>
-                <div className={`absolute top-0 right-0 h-full z-30 transition-transform duration-300 ease-in-out ${activeSidePanel === 'people' ? 'translate-x-0' : 'translate-x-full'}`}>
+                )}
+                {activeSidePanel === 'people' && (
                     <MeetingPeoplePanel 
                         meetingParticipants={meeting.participants} 
                         activeParticipants={allDisplayParticipants}
@@ -1038,15 +1026,15 @@ export const MeetingScreen: React.FC<MeetingScreenProps> = ({ callState, onEndCa
                         onAddPeople={() => onOpenAddPeoplePicker(meeting.chatId, activeParticipants)}
                         handleMuteParticipant={handleMuteParticipant}
                     />
-                </div>
-                 <div className={`absolute top-0 right-0 h-full z-30 transition-transform duration-300 ease-in-out ${activeSidePanel === 'effects' ? 'translate-x-0' : 'translate-x-full'}`}>
+                )}
+                 {activeSidePanel === 'effects' && (
                     <EffectsPanel 
                         currentEffect={backgroundEffect}
                         currentWallpaper={wallpaperUrl}
                         onChange={(effect, url) => { setBackgroundEffect(effect); setWallpaperUrl(url); }}
                         onClose={() => setActiveSidePanel(null)}
                     />
-                 </div>
+                 )}
             </main>
         </div>
     );

@@ -10,46 +10,52 @@ const PIXELS_PER_MINUTE = HOUR_HEIGHT / 60;
 
 const useAdvancedCalendar = (currentDate: Date, setCurrentDate: (updater: Date | ((d: Date) => Date)) => void, viewMode: CalendarViewMode, timezone?: string) => {
     const displayedDays = useMemo(() => {
-        const date = new Date(currentDate);
+        const getStartOfWeek = (date: Date) => {
+            const d = new Date(date);
+            const day = d.getUTCDay(); // 0 = Sunday, 1 = Monday, etc.
+            const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+            return new Date(d.setUTCDate(diff));
+        };
+
+        // Get the current date parts in the user's timezone to establish a correct "today"
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(currentDate);
+        const year = parseInt(parts.find(p => p.type === 'year')?.value || '1970', 10);
+        const month = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10);
+        const day = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
+
+        // A date object representing midnight UTC on the user's current day
+        const dateAtMidnightUTC = new Date(Date.UTC(year, month - 1, day));
+
         switch (viewMode) {
             case 'day':
-                return [new Date(date)];
+                return [dateAtMidnightUTC];
             case 'work-week': {
-                 const start = new Date(date);
-                const day = start.getDay();
-                const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Monday
-                start.setDate(diff);
-                 return Array.from({ length: 5 }).map((_, i) => {
+                const start = getStartOfWeek(dateAtMidnightUTC);
+                return Array.from({ length: 5 }).map((_, i) => {
                     const d = new Date(start);
-                    d.setDate(d.getDate() + i);
+                    d.setUTCDate(d.getUTCDate() + i);
                     return d;
                 });
             }
             case '2-week': {
-                const start = new Date(date);
-                const day = start.getDay();
-                const diff = start.getDate() - day + (day === 0 ? -6 : 1);
-                start.setDate(diff);
+                const start = getStartOfWeek(dateAtMidnightUTC);
                 return Array.from({ length: 14 }).map((_, i) => {
                     const d = new Date(start);
-                    d.setDate(d.getDate() + i);
+                    d.setUTCDate(d.getUTCDate() + i);
                     return d;
                 });
             }
             case 'week':
             default: {
-                const start = new Date(date);
-                const day = start.getDay();
-                const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Monday
-                start.setDate(diff);
+                const start = getStartOfWeek(dateAtMidnightUTC);
                 return Array.from({ length: 7 }).map((_, i) => {
                     const d = new Date(start);
-                    d.setDate(d.getDate() + i);
+                    d.setUTCDate(d.getUTCDate() + i);
                     return d;
                 });
             }
         }
-    }, [currentDate, viewMode]);
+    }, [currentDate, viewMode, timezone]);
 
     const navigate = useCallback((direction: 'prev' | 'next') => {
         setCurrentDate(prev => {
@@ -77,16 +83,16 @@ const useAdvancedCalendar = (currentDate: Date, setCurrentDate: (updater: Date |
         const start = displayedDays[0];
         const end = displayedDays[displayedDays.length - 1];
         
-        const startMonth = start.toLocaleString('default', { month: 'short', timeZone: timezone });
-        const endMonth = end.toLocaleString('default', { month: 'short', timeZone: timezone });
+        const startMonth = start.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
+        const endMonth = end.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
         
-        if (start.getFullYear() !== end.getFullYear()) {
-            return `${startMonth} ${start.getDate()}, ${start.getFullYear()} - ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
+        if (start.getUTCFullYear() !== end.getUTCFullYear()) {
+            return `${startMonth} ${start.getUTCDate()}, ${start.getUTCFullYear()} - ${endMonth} ${end.getUTCDate()}, ${end.getUTCFullYear()}`;
         }
         if (startMonth !== endMonth) {
-            return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${start.getFullYear()}`;
+            return `${startMonth} ${start.getUTCDate()} - ${endMonth} ${end.getUTCDate()}, ${start.getUTCFullYear()}`;
         }
-        return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
+        return `${startMonth} ${start.getUTCDate()} - ${end.getUTCDate()}, ${start.getUTCFullYear()}`;
 
     }, [currentDate, viewMode, displayedDays, timezone]);
 
@@ -175,7 +181,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
     
         const rangeStart = displayedDays[0];
         const rangeEnd = new Date(displayedDays[displayedDays.length - 1]);
-        rangeEnd.setHours(23, 59, 59, 999);
+        rangeEnd.setUTCHours(23, 59, 59, 999);
     
         const occurrences: Meeting[] = [];
     
@@ -183,7 +189,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
             const originalStart = new Date(meeting.startTime);
             const recurrenceEnd = meeting.recurrenceEndDate ? new Date(meeting.recurrenceEndDate) : null;
             if (recurrenceEnd) {
-                recurrenceEnd.setHours(23, 59, 59, 999);
+                recurrenceEnd.setUTCHours(23, 59, 59, 999);
             }
     
             if (meeting.recurrence === RecurrenceFrequency.None) {
@@ -235,13 +241,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
-            timeZone: user.settings?.timezone,
+            timeZone: 'UTC', // We compare dates in UTC since our displayedDays are now UTC-based
         }).format(d);
-    }, [user.settings?.timezone]);
+    }, []);
 
     const isToday = useCallback((d: Date) => {
-        return getDateString(d) === getDateString(new Date());
-    }, [getDateString]);
+        const todayInUserTz = new Intl.DateTimeFormat('fr-CA', { timeZone: user.settings?.timezone }).format(new Date());
+        const dayInUserTz = new Intl.DateTimeFormat('fr-CA', { timeZone: user.settings?.timezone }).format(d);
+        return dayInUserTz === todayInUserTz;
+    }, [user.settings?.timezone]);
 
     const showTimeIndicator = useMemo(() => {
         return displayedDays.some(isToday);
@@ -289,7 +297,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
             }, 100);
             return () => clearTimeout(timeoutId);
         }
-    }, [isToday, displayedDays]);
+    }, [isToday, displayedDays, timeIndicatorTop]);
 
     useEffect(() => {
         updateIndicator();
@@ -308,7 +316,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
         const minutes = y / PIXELS_PER_MINUTE;
 
         const clickedDate = new Date(displayedDays[dayIndex]);
-        clickedDate.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+        clickedDate.setUTCHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
 
         onScheduleMeeting(undefined, clickedDate);
     };
@@ -337,7 +345,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
 
         const meetingStart = new Date(meeting.startTime);
         const meetingEnd = new Date(meeting.endTime);
-
+        
         const dayString = getDateString(day);
         const startDayString = getDateString(meetingStart);
         const endDayString = getDateString(meetingEnd);
@@ -404,11 +412,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
                         {displayedDays.map(day => (
                             <div key={day.toISOString()} className={`text-center py-2 border-l border-slate-700`}>
                                  <p className={`text-xs uppercase font-semibold ${isToday(day) ? 'text-highlight' : 'text-text-secondary'}`}>
-                                    {day.toLocaleDateString('default', { weekday: 'short', timeZone: user.settings?.timezone })}
+                                    {day.toLocaleDateString('default', { weekday: 'short', timeZone: 'UTC' })}
                                 </p>
                                 <p className={`text-2xl mt-1 ${isToday(day) ? 'font-extrabold text-white bg-highlight rounded-full w-8 h-8 flex items-center justify-center mx-auto' : 'font-bold'}`}>
                                     <span>
-                                        {day.getDate()}
+                                        {day.getUTCDate()}
                                     </span>
                                 </p>
                             </div>
@@ -433,7 +441,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
                         {/* Day columns wrapper */}
                         <div className="absolute top-0 left-16 right-0 bottom-0 flex">
                             {displayedDays.map((day) => (
-                                <div key={day.toISOString()} className={`flex-1 border-l border-slate-600 ${isToday(day) ? 'bg-highlight/20' : ''}`}></div>
+                                <div key={day.toISOString()} className={`flex-1 border-l border-slate-600 ${isToday(day) ? 'bg-highlight/10' : ''}`}></div>
                             ))}
                         </div>
                          {/* Today's time indicator */}
@@ -448,17 +456,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onScheduleMeeting, d
                         {/* Meetings grid */}
                          <div ref={gridRef} onClick={handleGridClick} className="absolute top-0 left-16 right-0 bottom-0 flex">
                             {displayedDays.map((day) => {
-                                const dayString = getDateString(day);
-                                const meetingsForDay = meetings.filter(m => {
-                                    const startDay = getDateString(new Date(m.startTime));
-                                    const endDay = getDateString(new Date(m.endTime));
-                                    const endsAtMidnight = new Date(m.endTime).getHours() === 0 && new Date(m.endTime).getMinutes() === 0;
-                                    
-                                    if (endsAtMidnight && new Date(m.endTime).getTime() > new Date(m.startTime).getTime()) {
-                                        return dayString >= startDay && dayString < endDay;
-                                    }
-                                    return dayString >= startDay && dayString <= endDay;
+                                const dayStart = day;
+                                const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+
+                                const meetingsForDay = (meetings || []).filter(m => {
+                                    const meetingStart = new Date(m.startTime);
+                                    const meetingEnd = new Date(m.endTime);
+                                    return meetingStart < dayEnd && meetingEnd > dayStart;
                                 });
+
                                 return (
                                     <div key={day.toISOString()} className="flex-1 relative">
                                         {meetingsForDay.map(meeting => {

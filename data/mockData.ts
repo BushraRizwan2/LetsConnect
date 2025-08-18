@@ -203,6 +203,19 @@ export const initialChats: Chat[] = [
             chatId: 'chat-3',
             recurrence: RecurrenceFrequency.Weekly,
             isCancelled: false,
+        },
+        {
+            id: 'meeting-4',
+            title: 'Daily Stand-up',
+            description: 'Daily sync to discuss progress and blockers.',
+            location: 'Virtual',
+            startTime: new Date(new Date().setHours(18, 0, 0, 0)).toISOString(),
+            endTime: new Date(new Date().setHours(18, 30, 0, 0)).toISOString(),
+            participants: meetingParticipants.slice(0, 8), // A subset for this meeting
+            organizerId: 'admin-1',
+            chatId: 'chat-3',
+            recurrence: RecurrenceFrequency.Daily,
+            isCancelled: false,
         }
     ]
   },

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserStatus, Chat, Message, Meeting, CallInfo, RecurrenceFrequency } from '../types';
@@ -632,15 +630,37 @@ const CallLogItem: React.FC<{ message: Message; chat: Chat; onStartCall: (partne
     );
 });
 
+const UpcomingMeetingItem: React.FC<{ meeting: Meeting, onJoin: (meeting: Meeting) => void, onDetails: (meeting: Meeting) => void }> = ({ meeting, onJoin, onDetails }) => {
+    const { user } = useAppContext();
+    const startTime = new Date(meeting.startTime);
+
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: user.settings?.timezone }).toLowerCase();
+    };
+
+    return (
+        <li className="p-3 mx-2 space-y-2 rounded-lg bg-secondary">
+            <div onClick={() => onDetails(meeting)} className="cursor-pointer">
+                <p className="font-semibold text-text-primary">{meeting.title}</p>
+                <p className="text-sm text-text-secondary">{formatTime(startTime)}</p>
+            </div>
+            <button onClick={() => onJoin(meeting)} className="w-full text-center py-1.5 bg-accent text-white text-sm font-semibold rounded-md hover:bg-highlight">
+                Join
+            </button>
+        </li>
+    );
+};
+
 
 const ListHeader: React.FC<{ 
     title: string, 
     onCompose?: () => void,
     onNewEvent?: () => void,
-}> = ({ title, onCompose, onNewEvent }) => (
+    onNewTeam?: () => void,
+}> = ({ title, onCompose, onNewEvent, onNewTeam }) => (
     <div className="flex-shrink-0 p-4 flex justify-between items-center border-b border-slate-700">
         <h2 className="text-2xl font-bold">{title}</h2>
-        {onCompose && <ComposeMenu onNewMessage={onCompose} onNewTeam={()=>{}}/>}
+        {onCompose && onNewTeam && <ComposeMenu onNewMessage={onCompose} onNewTeam={onNewTeam}/>}
         {onNewEvent && <NewEventMenu onNewEvent={onNewEvent} />}
     </div>
 );
@@ -660,12 +680,33 @@ interface SidebarProps {
     onJoinWithId: () => void;
 }
 
+const CollapsibleSection: React.FC<{ title: string; children: React.ReactNode; count: number; }> = ({ title, children, count }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    if (count === 0) return null;
+
+    return (
+        <div>
+            <button
+                onClick={() => setIsCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm font-bold text-text-secondary hover:text-text-primary"
+            >
+                <span>{title}</span>
+                <ChevronDownIcon className={`w-4 h-4 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+            </button>
+            {!isCollapsed && <ul className="space-y-1 pb-2">{children}</ul>}
+        </div>
+    );
+};
+
+
 export const Sidebar: React.FC<SidebarProps> = (props) => {
     const { 
         onInitiateShareContact,
         onOpenProfilePictureModal,
         onOpenAddContact,
         onOpenNewChat,
+        onOpenAddTeamChat,
         onOpenScheduleMeeting,
         onJoinMeeting,
         onMeetingClick,
@@ -689,13 +730,13 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
         return [...chats]
             .filter(c => !c.isHidden)
             .sort((a, b) => {
-                if (a.isFavorite && !b.isFavorite) return -1;
-                if (!a.isFavorite && b.isFavorite) return 1;
                 const lastMsgA = a.messages[a.messages.length - 1];
                 const lastMsgB = b.messages[b.messages.length - 1];
                 if (lastMsgA && lastMsgB) {
                     return new Date(lastMsgB.timestamp).getTime() - new Date(lastMsgA.timestamp).getTime();
                 }
+                if (lastMsgA) return -1;
+                if (lastMsgB) return 1;
                 return 0;
             });
     }, [chats]);
@@ -707,37 +748,124 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
         )
         .sort((a, b) => new Date(b.message.timestamp).getTime() - new Date(a.message.timestamp).getTime()), [chats, user.id]);
 
+    const filteredChats = useMemo(() => sortedChats.filter(c => {
+        let name = '';
+        if (c.type === 'private') {
+            const partnerId = c.participants.find(p => p !== user.id);
+            name = partnerId ? getContactById(partnerId)?.name || '' : '';
+        } else {
+            name = c.name || 'Group Chat';
+        }
+        return name.toLowerCase().includes(searchTerm.toLowerCase());
+    }), [sortedChats, user.id, getContactById, searchTerm]);
+
+    const { favoriteChats, groupChats, directChats } = useMemo(() => {
+        const favorites: Chat[] = [];
+        const groups: Chat[] = [];
+        const directs: Chat[] = [];
+
+        filteredChats.forEach(chat => {
+            if (chat.isFavorite) {
+                favorites.push(chat);
+            } else if (chat.type === 'group') {
+                groups.push(chat);
+            } else {
+                directs.push(chat);
+            }
+        });
+        return { favoriteChats: favorites, groupChats: groups, directChats: directs };
+    }, [filteredChats]);
+    
+    const upcomingMeetings = useMemo(() => {
+        const allMeetingsRaw = chats.flatMap(c => c.meetings || []);
+        if (allMeetingsRaw.length === 0) return [];
+
+        const now = new Date();
+        const rangeStart = now;
+        const rangeEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+        rangeEnd.setHours(23, 59, 59, 999);
+        
+        const occurrences: Meeting[] = [];
+        
+        allMeetingsRaw.forEach(meeting => {
+            if(meeting.isCancelled) return;
+            const originalStart = new Date(meeting.startTime);
+
+            if (meeting.recurrence === RecurrenceFrequency.None) {
+                if (originalStart >= rangeStart && originalStart <= rangeEnd) {
+                    occurrences.push(meeting);
+                }
+                return;
+            }
+
+            const recurrenceEnd = meeting.recurrenceEndDate ? new Date(meeting.recurrenceEndDate) : null;
+            if (recurrenceEnd) recurrenceEnd.setHours(23, 59, 59, 999);
+
+            const originalEnd = new Date(meeting.endTime);
+            const duration = originalEnd.getTime() - originalStart.getTime();
+            let current = new Date(originalStart);
+            const originalDayOfUTCMonth = originalStart.getUTCDate();
+
+            while (current < originalStart && current < rangeEnd) {
+                 switch (meeting.recurrence) {
+                    case RecurrenceFrequency.Daily: current.setUTCDate(current.getUTCDate() + 1); break;
+                    case RecurrenceFrequency.Weekly: current.setUTCDate(current.getUTCDate() + 7); break;
+                    case RecurrenceFrequency.Monthly: current.setUTCMonth(current.getUTCMonth() + 1, originalDayOfUTCMonth); break;
+                }
+            }
+
+            for (let i = 0; i < 365 && current <= rangeEnd; i++) {
+                if (recurrenceEnd && current > recurrenceEnd) break;
+                if (current >= rangeStart) {
+                    occurrences.push({
+                        ...meeting,
+                        id: `${meeting.id}-${current.getTime()}`,
+                        startTime: current.toISOString(),
+                        endTime: new Date(current.getTime() + duration).toISOString(),
+                    });
+                }
+                switch (meeting.recurrence) {
+                    case RecurrenceFrequency.Daily: current.setUTCDate(current.getUTCDate() + 1); break;
+                    case RecurrenceFrequency.Weekly: current.setUTCDate(current.getUTCDate() + 7); break;
+                    case RecurrenceFrequency.Monthly: current.setUTCMonth(current.getUTCMonth() + 1, originalDayOfUTCMonth); break;
+                }
+            }
+        });
+
+        return occurrences.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    }, [chats]);
+
+
     const renderContent = () => {
         switch (props.activeContent) {
             case 'chats': {
-                const filteredChats = sortedChats.filter(c => {
-                    let name = '';
-                    if (c.type === 'private') {
-                        const partnerId = c.participants.find(p => p !== user.id);
-                        name = partnerId ? getContactById(partnerId)?.name || '' : '';
-                    } else {
-                        name = c.name || 'Group Chat';
-                    }
-                    return name.toLowerCase().includes(searchTerm.toLowerCase());
-                });
+                const renderChatList = (list: Chat[]) => list.map(chat => (
+                    <ChatListItem
+                        key={chat.id}
+                        chat={chat}
+                        isActive={chat.id === activeChatId}
+                        onClick={() => setActiveChatId(chat.id)}
+                        onInitiateShareContact={onInitiateShareContact}
+                    />
+                ));
 
                 return (
                     <div className="flex-1 flex flex-col min-h-0">
-                        <ListHeader title="Chats" onCompose={onOpenNewChat} />
+                        <ListHeader title="Chats" onCompose={onOpenNewChat} onNewTeam={onOpenAddTeamChat} />
                         <div className="p-2 flex-shrink-0">
                             <input type="text" placeholder="Search chats..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-secondary rounded-md px-3 py-1.5 text-sm" />
                         </div>
-                        <ul className="flex-1 overflow-y-auto space-y-1 pb-2">
-                            {filteredChats.map(chat => (
-                                <ChatListItem
-                                    key={chat.id}
-                                    chat={chat}
-                                    isActive={chat.id === activeChatId}
-                                    onClick={() => setActiveChatId(chat.id)}
-                                    onInitiateShareContact={onInitiateShareContact}
-                                />
-                            ))}
-                        </ul>
+                        <div className="flex-1 overflow-y-auto">
+                            <CollapsibleSection title="Favorites" count={favoriteChats.length}>
+                                {renderChatList(favoriteChats)}
+                            </CollapsibleSection>
+                             <CollapsibleSection title="Groups" count={groupChats.length}>
+                                {renderChatList(groupChats)}
+                            </CollapsibleSection>
+                            <CollapsibleSection title="Direct Messages" count={directChats.length}>
+                                {renderChatList(directChats)}
+                            </CollapsibleSection>
+                        </div>
                     </div>
                 );
             }
@@ -783,6 +911,17 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
                        <ListHeader title="Calendar" onNewEvent={() => onOpenScheduleMeeting()} />
                         <div className="p-2 flex-shrink-0">
                             <input type="text" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-secondary rounded-md px-3 py-1.5 text-sm" />
+                        </div>
+                        <div className="flex-1 overflow-y-auto mt-2">
+                             <h3 className="px-3 py-2 text-sm font-bold text-text-secondary">Upcoming Meetings</h3>
+                             <ul className="space-y-2 py-2">
+                                {(upcomingMeetings || []).filter(m => m.title.toLowerCase().includes(searchTerm.toLowerCase())).map(m => (
+                                    <UpcomingMeetingItem key={m.id} meeting={m} onJoin={onJoinMeeting} onDetails={onMeetingClick}/>
+                                ))}
+                                {(!upcomingMeetings || upcomingMeetings.length === 0) && (
+                                    <p className="px-3 text-sm text-text-secondary">No upcoming meetings in the next 7 days.</p>
+                                )}
+                             </ul>
                         </div>
                     </div>
                 );
